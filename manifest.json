@@ -1,0 +1,10 @@
+{
+	"id": "native-print",
+	"name": "Native Print",
+	"version": "2.0.0",
+	"minAppVersion": "1.0.0",
+	"description": "Print the current note on desktop (browser print dialog) and Android (via the Obsidian Print Helper companion APK). No file permissions required.",
+	"author": "Your Name",
+	"authorUrl": "https://github.com/your-username/obsidian-native-print",
+	"isDesktopOnly": false
+}

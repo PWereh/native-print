@@ -1,0 +1,40 @@
+/* Native Print Plugin — injected into the Obsidian document */
+@media print {
+	/* Hide Obsidian chrome */
+	.workspace-ribbon,
+	.workspace-split.mod-left-split,
+	.workspace-split.mod-right-split,
+	.status-bar,
+	.view-header,
+	.view-actions,
+	.graph-view-outer,
+	.nav-header,
+	.nav-files-container,
+	.workspace-tab-header-container {
+		display: none !important;
+	}
+
+	/* Expand content to full width */
+	.workspace-leaf-content,
+	.markdown-preview-view,
+	.markdown-source-view {
+		width: 100% !important;
+		max-width: none !important;
+		padding: 0 !important;
+	}
+
+	body {
+		background: white !important;
+		color: black !important;
+	}
+
+	/* Avoid page breaks inside blocks */
+	pre, blockquote, table, .callout { page-break-inside: avoid; }
+	h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
+
+	/* Remove link styling */
+	a { color: black !important; text-decoration: underline; }
+
+	/* Frontmatter — controlled by settings class */
+	.frontmatter-container { display: none; }
+}
