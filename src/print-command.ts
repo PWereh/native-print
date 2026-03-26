@@ -88,9 +88,20 @@ function getPrintExecutor(plugin: NativePrintPlugin) {
 }
 
 function sendToAndroidHelper(fullHtml: string, plugin: NativePrintPlugin): void {
-	const base64 = btoa(unescape(encodeURIComponent(fullHtml)));
+	// btoa() produces standard base64 (+, /, = padding).
+	// The APK decodes with Base64.URL_SAFE | Base64.NO_PADDING, which expects
+	// the URL-safe alphabet (- instead of +, _ instead of /, no = padding).
+	// Convert here so both ends agree.
+	const base64 = btoa(unescape(encodeURIComponent(fullHtml)))
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=+$/, '');
 	if (base64.length > 900_000) {
 		new Notice('Note is very large \u2014 embedded images may be omitted.', 6000);
 	}
-	window.open(buildHelperUrl.toIntentUrl(base64, plugin.settings), '_blank');
+	// Use anchor click, not window.open() — window.open() triggers the Capacitor
+	// full-screen browser on Android, hanging the UI.
+	const a = document.createElement('a');
+	a.href = buildHelperUrl.toIntentUrl(base64, plugin.settings);
+	a.click();
 }
