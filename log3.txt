@@ -1,5 +1,0 @@
-
-> obsidian-native-print@2.0.0 build
-> tsc -noEmit -skipLibCheck && node esbuild.config.mjs production
-
-/data/data/com.termux/files/usr/bin/sh: 1: tsc: not found
