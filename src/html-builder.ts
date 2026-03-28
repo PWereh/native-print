@@ -13,6 +13,7 @@ function wrapDocument(
 	title: string,
 	s: PrintPluginSettings
 ): string {
+	const titleHeading = s.includeTitle ? `<h1 class="np-doc-title">${escapeHtml(title)}</h1>\n` : '';
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -32,6 +33,7 @@ function wrapDocument(
       background: #fff;
       margin: 0;
     }
+    .np-doc-title { margin: 0 0 0.75em; font-size: 1.6em; border-bottom: 1px solid #ccc; padding-bottom: 0.25em; }
     h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
     pre, blockquote, table    { page-break-inside: avoid; }
     img  { max-width: 100%; page-break-inside: avoid; }
@@ -47,7 +49,7 @@ function wrapDocument(
     ${s.includeYamlFrontmatter ? '' : '.frontmatter, .frontmatter-container { display: none !important; }'}
   </style>
 </head>
-<body>${bodyHtml}</body>
+<body>${titleHeading}${bodyHtml}</body>
 </html>`;
 }
 

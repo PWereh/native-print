@@ -1,6 +1,6 @@
 # Native Print
 
-An [Obsidian](https://obsidian.md) plugin that prints the current note on desktop via the browser print dialog, and on Android via the [Obsidian Print Helper](https://github.com/PWereh/obsidian-print-helper) companion APK.
+An [Obsidian](https://obsidian.md) plugin that prints the current note on desktop via the browser print dialog, and on Android via the [Obsidian Print Helper](https://github.com/PWereh/native-print-helper) companion APK.
 
 No file permissions required on Android (API 33+). HTML is passed inline via a custom URL scheme — no `READ_EXTERNAL_STORAGE` or scoped-storage handling needed.
 
@@ -10,10 +10,55 @@ No file permissions required on Android (API 33+). HTML is passed inline via a c
 
 - **Desktop** — triggers `window.print()` directly
 - **Android** — renders the note to HTML and launches the Print Helper APK via a custom scheme URL
-- Page size: A4 / Letter / Legal
-- Configurable margins, font size, font family
-- Optional YAML frontmatter in output
-- Ribbon icon + command palette entry
+- Live print preview with inline toolbar (paper size, margins, font, title, metadata toggles)
+- Page sizes: A3, A4, A5, Letter, Legal, Tabloid
+- Margin presets (Normal / Narrow / Wide) plus custom sliders
+- Optional document title heading and YAML frontmatter in output
+- Ribbon icon + command palette entry + context menu
+
+---
+
+## Roadmap
+
+```mermaid
+gantt
+    title Native Print — Development Roadmap
+    dateFormat YYYY-MM-DD
+    axisFormat %b %Y
+
+    section v2.1 · Preview Controls
+    Live toolbar (paper, margins, font)    :done,    pv1, 2026-03-01, 2026-03-28
+    Restore title & metadata toggles       :done,    pv2, 2026-03-15, 2026-03-28
+    Expanded paper sizes (A3/A5/Tabloid)   :done,    pv3, 2026-03-20, 2026-03-28
+    Margin presets (Normal/Narrow/Wide)    :done,    pv4, 2026-03-20, 2026-03-28
+
+    section v2.2 · Deep Settings
+    Code-block text-wrap option            :active,  ds1, 2026-04-01, 2026-04-14
+    Image parsing & inline embedding       :         ds2, 2026-04-07, 2026-04-21
+    True-colour print output               :         ds3, 2026-04-14, 2026-04-28
+
+    section v2.3 · Layout Engine
+    Custom header / footer templates       :         le1, 2026-05-01, 2026-05-21
+    Inject custom CSS from vault root      :         le2, 2026-05-07, 2026-05-28
+
+    section v3.0 · Pandoc Engine
+    Pandoc format / typeset / style toggle :         pe1, 2026-06-01, 2026-07-01
+    Print from context menu (file tree)    :         pe2, 2026-06-01, 2026-06-21
+```
+
+### Backlog detail
+
+| Area | Item | Priority |
+|---|---|---|
+| Preview | Code-block text-wrap toggle | High |
+| Preview | Image parsing (base64 inline) | High |
+| Preview | True-colour output (no forced #000) | Medium |
+| Layout | Custom header/footer per-template | Medium |
+| Layout | Custom CSS from `.css` at vault root | Medium |
+| Engine | Pandoc integration (format/typeset) | Low |
+| UX | Print from file-explorer context menu | Medium |
+
+---
 
 ## Installation
 
@@ -27,11 +72,17 @@ Search for **Native Print** in Settings → Community Plugins.
 2. Copy them into `<vault>/.obsidian/plugins/native-print/`
 3. Enable the plugin in Settings → Community Plugins
 
+---
+
 ## Android Setup
 
 See [docs/android-setup.md](docs/android-setup.md) for instructions on installing the companion APK.
 
+---
+
 ## Development
+
+### Standard (macOS / Linux / Windows)
 
 ```bash
 npm install
@@ -42,196 +93,61 @@ npm run lint     # eslint
 
 Requires Node 18+.
 
-## Release
+### Termux (Android)
 
-Push a semver tag to trigger the release workflow:
+Termux has two endemic issues: `EACCES` (Android restricts writes outside home) and
+`tsc: not found` (PATH symlink resolution is unreliable). Both are avoided here.
+
+**One-time setup:**
+
+```bash
+termux-setup-storage           # grant all-files access when prompted
+pkg update && pkg upgrade -y
+pkg install nodejs-lts git dos2unix
+
+# Work in Termux home — never /sdcard
+cp -r /storage/emulated/0/your-project ~/
+cd ~/your-project
+```
+
+**Install & fix binaries:**
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+find node_modules/.bin/ -type l -exec dos2unix {} + 2>/dev/null || true
+chmod +x node_modules/.bin/*
+```
+
+**Build & deploy in one command:**
+
+```bash
+npm run deploy   # builds then copies main.js + manifest.json + styles.css to vault
+```
+
+Edit `deploy.sh` to set your `VAULT_DIR` path before first use.
+
+| Error | Fix |
+|---|---|
+| `EACCES: permission denied` | Move project to `~/` |
+| `tsc: not found` | Use `node node_modules/typescript/bin/tsc` — already in scripts |
+| `esbuild: Exec format error` | `pkg install esbuild` |
+| `sh: ./file: not found` | `dos2unix` on the file |
+
+---
+
+## Release
 
 ```bash
 npm run version   # bumps manifest.json + versions.json, stages both
-git commit -m "chore: release 2.1.0"
-git tag 2.1.0
+git commit -m "chore: release x.y.z"
+git tag x.y.z
 git push && git push --tags
 ```
 
 GitHub Actions will build and publish a release with `main.js`, `manifest.json`, and `styles.css`.
 
-# Termux Workflow
-
-This workflow is designed to bypass the common EACCES (Permission Denied) and sh: tsc: not found errors that occur in Termux due to Android’s storage restrictions and incompatible line endings.
-
-## 1. Environment Setup (The Foundation)
-
-Always work in the Termux Home Directory. Do not use `/sdcard` or shared storage for development.
-
-- Initialize Storage & Packages:
-    
-    ```bash
-    termux-setup-storage
-    pkg update && pkg upgrade
-    pkg install nodejs-lts git dos2unix
-    ```
-    
-- Move Project to Home:  
-    If your project is currently on the SD card, move it to `~/`:
-    
-    ```bash
-    cp -r /storage/emulated/0/your-project ~/
-    cd ~/your-project
-    ```
-    
-
-## 2. Dependency Management (The "Termux Way")
-
-Standard `npm install` often fails to link binaries correctly on Android. Follow this sequence for a clean slate:
-
-- Clean & Install:
-    
-    ```bash
-    rm -rf node_modules package-lock.json
-    npm install
-    ```
-    
-- Fix Line Endings (Critical):  
-    Scripts often arrive with Windows `\r` (CRLF) endings which Termux cannot execute. Fix them globally in your project:
-    
-    ```bash
-    find node_modules/.bin/ -type l -exec dos2unix {} +
-    dos2unix node_modules/typescript/bin/tsc
-    chmod +x node_modules/.bin/*
-    ```
-    
-
-## 3. Bulletproof `package.json` Configuration
-
-To avoid the `sh: 1: tsc: not found` error, bypass the shell's PATH and call the Node engine directly for your binaries. Update your `scripts` section:
-
-```json
-"scripts": {
-  "dev": "node node_modules/esbuild/bin/esbuild --bundle ...",
-  "build": "node node_modules/typescript/bin/tsc -noEmit && node esbuild.config.mjs production",
-  "lint": "node node_modules/eslint/bin/eslint.js ."
-}
-```
-
-_By prefixing with `node`, you ensure the script runs even if the file permissions or symlinks are flaky._
-
-## 4. Build & Execution Workflow
-
-When you are ready to compile or run your app:
-
-1. Run Build: `npm run build`
-2. Verify Output: Check for your `main.js` or `dist/` folder:
-    
-    ```bash
-    ls -lh
-    ```
-    
-3. Deploy (e.g., to Obsidian):  
-    Since Obsidian can't see the Termux home folder easily, copy the final build out to your vault:
-    
-    ```bash
-    cp main.js manifest.json /storage/emulated/0/Documents/Vault/.obsidian/plugins/your-plugin/
-    ```
-    
-
-## 5. Troubleshooting Cheat Sheet
-
-|Error|Solution|
-|---|---|
-|`EACCES: permission denied`|Move project to `~/` (Home). Do not build on `/sdcard`.|
-|`tsc: not found`|Use `node node_modules/typescript/bin/tsc` in your script.|
-|`esbuild: Exec format error`|Run `pkg install esbuild` to get the native Termux binary.|
-|`sh: ./file: not found`|Run `dos2unix` on the file; it has hidden Windows line endings.|
-
-To automate this, you can create a deploy script that builds the project and then copies the final files directly into your Obsidian vault.
-
-## 1. Identify Your Vault Path
-
-First, find the exact path to your plugin folder. It usually looks like this:  
-`/storage/emulated/0/Documents/YourVault/.obsidian/plugins/native-print`
-
-## 2. Create the Deploy Script (`deploy.sh`)
-
-Create a small bash script in your project root:
-
-```bash
-nano deploy.sh
-```
-
-Paste the following (replace the `VAULT_DIR` with your actual path):
-
-```bash
-#!/bin/bash
-
-# 1. Set your destination (Double check this path!)
-VAULT_DIR="/storage/emulated/0/Documents/binx/.obsidian/plugins/native-print"
-
-# 2. Run the build
-echo "Building project..."
-npm run build
-
-# 3. Check if build succeeded
-if [ $? -eq 0 ]; then
-    echo "Build successful. Deploying to vault..."
-    
-    # Create directory if it doesn't exist
-    mkdir -p "$VAULT_DIR"
-    
-    # Copy only the necessary files
-    cp main.js manifest.json styles.css "$VAULT_DIR/"
-    
-    echo "Done! Restart Obsidian to see changes."
-else
-    echo "Build failed. Check logs."
-fi
-```
-
-## 3. Make it Executable
-
-Give Termux permission to run the script:
-
-```bash
-chmod +x deploy.sh
-```
-
-## 4. Update `package.json`
-
-Now, integrate it into your `npm` workflow so you can just type one command:
-
-```json
-"scripts": {
-  "build": "node node_modules/typescript/bin/tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-  "deploy": "./deploy.sh"
-}
-```
-
-## 5. Final Workflow
-
-From now on, whenever you make a change, just run:
-
-```bash
-npm run deploy
-```
-
-Wait! Have you already run `termux-setup-storage` and granted the Files and Media permission? Termux needs that "all files access" to write into your Obsidian vault folder.
-
-
-Todo
-
-- [x] Revamp print preview page setup modal
-	- [ ] Restore toggles
-	- [ ] Explore other paper sizes  
-	- [ ] print metadata?
-	- [ ] 
-- [x] Enhance Settings(deep)
-	- [ ] Allow code-block text-wrap (deep setting)
-	- [ ] Allow image parsing
-	- [ ] Allow true color prints
-	- [ ] Custom Header/footer
-	- [ ] Custom css from .css at vault root 
-- [x] Enhance print engine
-	- [ ] Add pandoc support for format, typeset, style toggles
-	- [ ] Add print function within context menu
+---
 
 ## License
 

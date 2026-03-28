@@ -1,107 +1,168 @@
 import { App, Modal, Platform } from 'obsidian';
-import { PrintPluginSettings } from './settings';
+import { PrintPluginSettings, PAGE_SIZE_LABELS, MARGIN_PRESETS, MarginPreset, PageSize } from './settings';
 import { buildHelperUrl } from './html-builder';
 
 export type PrintExecutor = (html: string) => void;
 
 /**
- * PrintPreviewModal
+ * PrintPreviewModal — live-updating print preview with inline toolbar.
  *
- * Ported from the obsidian-enhancing-export dialog pattern but re-implemented
- * with Obsidian's native Modal API so it works on both desktop AND Android.
+ * Layout:
+ *   ┌─ toolbar ───────────────────────────────────────────────────────┐
+ *   │ [Paper ▼] [Margins ▼] [Font pt ↕] [☑ Title] [☑ Metadata]      │
+ *   ├─ preview (flex-1) ──────────────────────────────────────────────┤
+ *   │  <iframe srcdoc="...">                                          │
+ *   ├─ buttons ───────────────────────────────────────────────────────┤
+ *   │                               [Cancel]  [🖨 Print…]            │
+ *   └─────────────────────────────────────────────────────────────────┘
  *
- * Flow:
- *  1. Caller renders note → HTML fragment
- *  2. html-builder wraps it into a full print-ready document
- *  3. Modal shows the document inside a sandboxed <iframe>
- *  4. User clicks "Print" → executor fires (either window.print() or APK intent)
- *  5. User clicks "Cancel" → modal closes, nothing is printed
+ * Controls mutate a local settings copy; the iframe re-renders on every
+ * change (debounced 250 ms). Changes are NOT persisted to plugin settings —
+ * the caller's executor receives the final HTML only on Print click.
  */
 export class PrintPreviewModal extends Modal {
-	private readonly html: string;
+	private readonly fragment: string;          // rendered HTML fragment (no wrapper)
 	private readonly title: string;
-	private readonly settings: PrintPluginSettings;
 	private readonly onPrint: PrintExecutor;
+	private local: PrintPluginSettings;         // mutable local copy
+	private frame: HTMLIFrameElement | null = null;
+	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(
 		app: App,
-		html: string,
+		fragment: string,
 		title: string,
 		settings: PrintPluginSettings,
 		onPrint: PrintExecutor
 	) {
 		super(app);
-		this.html = html;
-		this.title = title;
-		this.settings = settings;
-		this.onPrint = onPrint;
+		this.fragment  = fragment;
+		this.title     = title;
+		this.onPrint   = onPrint;
+		this.local     = { ...settings };        // shallow clone — safe for flat interface
 	}
 
 	onOpen(): void {
 		const { modalEl, contentEl } = this;
-
-		// ── Widen the modal to use most of the viewport ─────────────────────
 		modalEl.addClass('native-print-preview-modal');
-
-		// ── Header ──────────────────────────────────────────────────────────
 		this.setTitle(`Print Preview — ${this.title}`);
 
-		// ── Page info strip ─────────────────────────────────────────────────
-		const infoBar = contentEl.createDiv({ cls: 'native-print-info-bar' });
-		infoBar.createSpan({
-			text: `${this.settings.pageSize}  ·  ${this.settings.fontSize}pt  ·  ${this.settings.fontFamily}`,
-			cls: 'native-print-info-text',
+		// ── Toolbar ─────────────────────────────────────────────────────────
+		const toolbar = contentEl.createDiv({ cls: 'native-print-toolbar' });
+
+		// Paper size
+		this.addSelect(toolbar, 'Paper', PAGE_SIZE_LABELS, this.local.pageSize, (v) => {
+			this.local.pageSize = v as PageSize;
+			this.scheduleRerender();
 		});
 
+		// Margin preset
+		this.addSelect(toolbar, 'Margins', {
+			normal:  'Normal',
+			narrow:  'Narrow',
+			wide:    'Wide',
+		}, this.local.marginPreset === 'custom' ? 'normal' : this.local.marginPreset, (v) => {
+			const preset = MARGIN_PRESETS[v as MarginPreset];
+			this.local.marginPreset = v as MarginPreset;
+			this.local.marginTop    = preset.top;
+			this.local.marginBottom = preset.bottom;
+			this.local.marginLeft   = preset.left;
+			this.local.marginRight  = preset.right;
+			this.scheduleRerender();
+		});
+
+		// Font size stepper
+		const fontGroup = toolbar.createDiv({ cls: 'native-print-toolbar-group' });
+		fontGroup.createSpan({ cls: 'native-print-toolbar-label', text: 'Font' });
+		const fontVal = fontGroup.createSpan({ cls: 'native-print-toolbar-value', text: `${this.local.fontSize}pt` });
+		const dec = fontGroup.createEl('button', { cls: 'native-print-stepper', text: '−' });
+		const inc = fontGroup.createEl('button', { cls: 'native-print-stepper', text: '+' });
+		const updateFont = (delta: number) => {
+			this.local.fontSize = Math.min(18, Math.max(8, this.local.fontSize + delta));
+			fontVal.textContent = `${this.local.fontSize}pt`;
+			this.scheduleRerender();
+		};
+		dec.addEventListener('click', () => updateFont(-1));
+		inc.addEventListener('click', () => updateFont(+1));
+
+		// Toggles
+		this.addToggle(toolbar, 'Title',    this.local.includeTitle,         (v) => { this.local.includeTitle = v;            this.scheduleRerender(); });
+		this.addToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, (v) => { this.local.includeYamlFrontmatter = v; this.scheduleRerender(); });
+
+		// Platform badge
 		if (Platform.isAndroidApp) {
-			infoBar.createSpan({
-				text: '  ·  Android Print Helper',
-				cls: 'native-print-info-badge',
-			});
+			toolbar.createSpan({ cls: 'native-print-info-badge', text: 'Android' });
 		}
 
 		// ── Preview iframe ───────────────────────────────────────────────────
-		// Build the full print-ready document and inject it via srcdoc so no
-		// cross-origin issues arise; sandbox attr blocks script execution.
-		const fullHtml = buildHelperUrl.wrapDocument(this.html, this.title, this.settings);
-
-		const frame = contentEl.createEl('iframe', {
+		const previewArea = contentEl.createDiv({ cls: 'native-print-preview-area' });
+		this.frame = previewArea.createEl('iframe', {
 			cls: 'native-print-preview-frame',
-			attr: {
-				sandbox: 'allow-same-origin',   // needed for layout; scripts blocked
-				srcdoc: fullHtml,
-			},
+			attr: { sandbox: 'allow-same-origin' },
 		}) as HTMLIFrameElement;
+		this.renderFrame();
 
-		// Make the frame fill the available modal space
-		frame.style.cssText = [
-			'width: 100%',
-			'flex: 1 1 auto',
-			'border: 1px solid var(--background-modifier-border)',
-			'border-radius: 4px',
-			'background: #fff',
-			'min-height: 0',          // flex-child shrink works correctly
-		].join(';');
-
-		// ── Button row (mirrors enhancing-export dialog footer) ──────────────
-		const btnRow = contentEl.createDiv({ cls: 'modal-button-container native-print-btn-row' });
-
-		// Cancel
+		// ── Button row ───────────────────────────────────────────────────────
+		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
 		const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
 		cancelBtn.addEventListener('click', () => this.close());
 
-		// Print (CTA)
 		const printBtn = btnRow.createEl('button', {
 			text: Platform.isAndroidApp ? '⬡  Send to Print Helper' : '🖨  Print…',
 			cls: 'mod-cta',
 		});
 		printBtn.addEventListener('click', () => {
 			this.close();
-			this.onPrint(fullHtml);
+			this.onPrint(buildHelperUrl.wrapDocument(this.fragment, this.title, this.local));
 		});
 	}
 
 	onClose(): void {
+		if (this.debounceTimer) clearTimeout(this.debounceTimer);
 		this.contentEl.empty();
+	}
+
+	// ── Private helpers ────────────────────────────────────────────────────
+
+	private renderFrame(): void {
+		if (!this.frame) return;
+		const fullHtml = buildHelperUrl.wrapDocument(this.fragment, this.title, this.local);
+		this.frame.srcdoc = fullHtml;
+	}
+
+	private scheduleRerender(): void {
+		if (this.debounceTimer) clearTimeout(this.debounceTimer);
+		this.debounceTimer = setTimeout(() => this.renderFrame(), 250);
+	}
+
+	private addSelect(
+		parent: HTMLElement,
+		label: string,
+		options: Record<string, string>,
+		value: string,
+		onChange: (v: string) => void
+	): void {
+		const group = parent.createDiv({ cls: 'native-print-toolbar-group' });
+		group.createSpan({ cls: 'native-print-toolbar-label', text: label });
+		const sel = group.createEl('select', { cls: 'native-print-toolbar-select' });
+		for (const [k, v] of Object.entries(options)) {
+			const opt = sel.createEl('option', { value: k, text: v });
+			if (k === value) opt.selected = true;
+		}
+		sel.addEventListener('change', () => onChange(sel.value));
+	}
+
+	private addToggle(
+		parent: HTMLElement,
+		label: string,
+		checked: boolean,
+		onChange: (v: boolean) => void
+	): void {
+		const group = parent.createDiv({ cls: 'native-print-toolbar-group native-print-toolbar-toggle' });
+		const id = `np-toggle-${label.toLowerCase()}`;
+		const cb = group.createEl('input', { attr: { type: 'checkbox', id } }) as HTMLInputElement;
+		cb.checked = checked;
+		group.createEl('label', { attr: { for: id }, text: label });
+		cb.addEventListener('change', () => onChange(cb.checked));
 	}
 }
