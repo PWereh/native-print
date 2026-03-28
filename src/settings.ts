@@ -3,9 +3,11 @@ import NativePrintPlugin from './main';
 
 export type PageSize = 'A3' | 'A4' | 'A5' | 'Letter' | 'Legal' | 'Tabloid';
 export type MarginPreset = 'normal' | 'narrow' | 'wide' | 'custom';
+export type Orientation = 'portrait' | 'landscape';
 
 export interface PrintPluginSettings {
 	pageSize: PageSize;
+	orientation: Orientation;
 	marginPreset: MarginPreset;
 	marginTop: number;
 	marginBottom: number;
@@ -36,6 +38,7 @@ export const PAGE_SIZE_LABELS: Record<PageSize, string> = {
 
 export const DEFAULT_SETTINGS: PrintPluginSettings = {
 	pageSize: 'A4',
+	orientation: 'portrait',
 	marginPreset: 'normal',
 	marginTop: 20,
 	marginBottom: 20,
@@ -84,6 +87,19 @@ export class PrintSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 			});
+
+		new Setting(containerEl)
+			.setName('Orientation')
+			.setDesc('Portrait or landscape page layout.')
+			.addDropdown(d =>
+				d.addOption('portrait', 'Portrait')
+					.addOption('landscape', 'Landscape')
+					.setValue(this.plugin.settings.orientation)
+					.onChange(async v => {
+						this.plugin.settings.orientation = v as Orientation;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
 			.setName('Margin preset')

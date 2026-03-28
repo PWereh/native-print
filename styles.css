@@ -1,6 +1,7 @@
-/* Native Print Plugin — injected into the Obsidian document */
+/* ═══════════════════════════════════════════════════════════════
+   PRINT MEDIA — hide Obsidian chrome, expand content
+   ═══════════════════════════════════════════════════════════════ */
 @media print {
-	/* Hide Obsidian chrome */
 	.workspace-ribbon,
 	.workspace-split.mod-left-split,
 	.workspace-split.mod-right-split,
@@ -10,11 +11,8 @@
 	.graph-view-outer,
 	.nav-header,
 	.nav-files-container,
-	.workspace-tab-header-container {
-		display: none !important;
-	}
+	.workspace-tab-header-container { display: none !important; }
 
-	/* Expand content to full width */
 	.workspace-leaf-content,
 	.markdown-preview-view,
 	.markdown-source-view {
@@ -22,19 +20,250 @@
 		max-width: none !important;
 		padding: 0 !important;
 	}
-
-	body {
-		background: white !important;
-		color: black !important;
-	}
-
-	/* Avoid page breaks inside blocks */
+	body { background: white !important; color: black !important; }
 	pre, blockquote, table, .callout { page-break-inside: avoid; }
 	h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
-
-	/* Remove link styling */
 	a { color: black !important; text-decoration: underline; }
-
-	/* Frontmatter — controlled by settings class */
 	.frontmatter-container { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PRINT PREVIEW MODAL — Samsung OneUI translucent glass
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Glass card frame ──────────────────────────────────────────── */
+.native-print-preview-modal {
+	width:      96vw !important;
+	max-width:  96vw !important;
+	height:     95vh !important;
+	max-height: 95vh !important;
+	border-radius: 22px !important;
+	background: rgba(13, 13, 18, 0.93) !important;
+	backdrop-filter: blur(32px) saturate(1.8) !important;
+	-webkit-backdrop-filter: blur(32px) saturate(1.8) !important;
+	border: 1px solid rgba(255, 255, 255, 0.09) !important;
+	box-shadow:
+		0 32px 80px rgba(0, 0, 0, 0.65),
+		0 1px 0   rgba(255, 255, 255, 0.07) inset !important;
+	display: flex !important;
+	flex-direction: column !important;
+	overflow: hidden !important;
+	padding: 0 !important;
+}
+
+/* ── Title bar ──────────────────────────────────────────────────── */
+.native-print-preview-modal .modal-title {
+	color:          rgba(255, 255, 255, 0.90) !important;
+	font-size:      13px !important;
+	font-weight:    600 !important;
+	letter-spacing: 0.01em !important;
+	padding:        13px 48px 11px 16px !important;
+	border-bottom:  1px solid rgba(255, 255, 255, 0.07) !important;
+	flex-shrink:    0 !important;
+}
+.native-print-preview-modal .modal-close-button {
+	color: rgba(255, 255, 255, 0.45) !important;
+}
+.native-print-preview-modal .modal-close-button:hover {
+	color: rgba(255, 255, 255, 0.90) !important;
+}
+
+/* ── Content area (strips default Obsidian padding) ─────────────── */
+.native-print-preview-modal .modal-content {
+	display:        flex !important;
+	flex-direction: column !important;
+	flex:           1 1 auto !important;
+	overflow:       hidden !important;
+	padding:        0 !important;
+	min-height:     0 !important;
+}
+
+/* ── Preview area ───────────────────────────────────────────────── */
+.native-print-preview-area {
+	flex:       1 1 auto;
+	min-height: 0;
+	background: #c8c8c8;
+	display:    flex;
+	padding:    10px;
+	overflow:   hidden;
+}
+.native-print-preview-frame {
+	flex:         1 1 auto;
+	border:       none;
+	border-radius:8px;
+	background:   #ffffff;
+	box-shadow:   0 4px 24px rgba(0, 0, 0, 0.38);
+	display:      block;
+	min-height:   0;
+}
+
+/* ── Compact toolbar (bottom quarter) ───────────────────────────── */
+.native-print-toolbar {
+	display:        flex;
+	flex-wrap:      wrap;
+	align-items:    center;
+	gap:            6px 16px;
+	padding:        9px 14px 8px;
+	background:     rgba(255, 255, 255, 0.04);
+	border-top:     1px solid rgba(255, 255, 255, 0.07);
+	flex-shrink:    0;
+}
+.native-print-toolbar-group {
+	display:     flex;
+	align-items: center;
+	gap:         5px;
+	white-space: nowrap;
+}
+.native-print-toolbar-label {
+	font-size:  11px;
+	color:      rgba(255, 255, 255, 0.48);
+	letter-spacing: 0.01em;
+}
+
+/* Chip-style <select> */
+.native-print-toolbar-select {
+	appearance:        none;
+	-webkit-appearance:none;
+	background:        rgba(255, 255, 255, 0.11);
+	border:            1px solid rgba(255, 255, 255, 0.15);
+	border-radius:     8px;
+	color:             rgba(255, 255, 255, 0.92);
+	font-size:         12px;
+	padding:           3px 22px 3px 8px;
+	height:            28px;
+	cursor:            pointer;
+	background-image:  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='rgba(255,255,255,0.45)'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 7px center;
+}
+.native-print-toolbar-select:focus {
+	outline:      none;
+	border-color: rgba(255, 255, 255, 0.35);
+}
+.native-print-toolbar-select option {
+	background: #1a1a22;
+	color:      #fff;
+}
+
+/* Stepper: [−] [value unit] [+] */
+.native-print-stepper {
+	width:        26px;
+	height:       26px;
+	border-radius:50%;
+	background:   rgba(255, 255, 255, 0.11);
+	border:       1px solid rgba(255, 255, 255, 0.15);
+	color:        rgba(255, 255, 255, 0.88);
+	font-size:    16px;
+	line-height:  1;
+	display:      flex;
+	align-items:  center;
+	justify-content: center;
+	cursor:       pointer;
+	padding:      0;
+	flex-shrink:  0;
+	transition:   background 0.12s;
+}
+.native-print-stepper:hover  { background: rgba(255,255,255,0.20); }
+.native-print-stepper:active { background: rgba(255,255,255,0.07); }
+
+.native-print-stepper-value {
+	min-width:       34px;
+	text-align:      center;
+	font-size:       12px;
+	font-weight:     500;
+	font-variant-numeric: tabular-nums;
+	color:           rgba(255, 255, 255, 0.92);
+}
+
+/* Circle-checkbox toggle */
+.np-toggle-group {
+	display:     flex;
+	align-items: center;
+	gap:         5px;
+	cursor:      pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+.np-toggle-cb {
+	appearance:         none;
+	-webkit-appearance: none;
+	width:        18px;
+	height:       18px;
+	border-radius:50%;
+	border:       2px solid rgba(255, 255, 255, 0.30);
+	background:   transparent;
+	cursor:       pointer;
+	position:     relative;
+	flex-shrink:  0;
+	transition:   border-color 0.14s, background 0.14s;
+}
+.np-toggle-cb:checked {
+	background:   #3d8bff;
+	border-color: #3d8bff;
+}
+.np-toggle-cb:checked::after {
+	content:   '';
+	position:  absolute;
+	top:  2px; left: 5px;
+	width: 5px; height: 9px;
+	border:      2px solid #fff;
+	border-top:  none;
+	border-left: none;
+	transform:   rotate(45deg);
+}
+.np-toggle-text {
+	font-size:   11.5px;
+	color:       rgba(255, 255, 255, 0.52);
+	user-select: none;
+}
+
+/* ── Button row ─────────────────────────────────────────────────── */
+.native-print-btn-row {
+	display:         flex;
+	justify-content: flex-end;
+	align-items:     center;
+	gap:             10px;
+	padding:         10px 14px 14px;
+	flex-shrink:     0;
+}
+.native-print-btn-row button {
+	min-height:    40px;
+	min-width:     90px;
+	border-radius: 12px;
+	font-size:     14px;
+	font-weight:   500;
+	padding:       0 20px;
+	cursor:        pointer;
+	border:        none;
+	transition:    opacity 0.14s, box-shadow 0.14s;
+	-webkit-tap-highlight-color: transparent;
+}
+.native-print-btn-row button:active { opacity: 0.72; }
+
+/* Cancel */
+.native-print-btn-row button:not(.mod-cta) {
+	background: rgba(255, 255, 255, 0.10);
+	color:      rgba(255, 255, 255, 0.78);
+	border:     1px solid rgba(255, 255, 255, 0.13);
+}
+.native-print-btn-row button:not(.mod-cta):hover {
+	background: rgba(255, 255, 255, 0.17);
+}
+
+/* Print CTA */
+.native-print-btn-row .mod-cta {
+	background: linear-gradient(135deg, #2979ff 0%, #1451b8 100%);
+	color:      #fff;
+	box-shadow: 0 2px 14px rgba(41, 121, 255, 0.40);
+}
+.native-print-btn-row .mod-cta:hover {
+	box-shadow: 0 4px 20px rgba(41, 121, 255, 0.56);
+}
+
+/* ── Mobile (<480px) — stack buttons full-width ──────────────────── */
+@media (max-width: 480px) {
+	.native-print-btn-row {
+		flex-direction: column-reverse;
+		gap: 8px;
+	}
+	.native-print-btn-row button { width: 100%; }
 }

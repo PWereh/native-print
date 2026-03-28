@@ -21,7 +21,7 @@ function wrapDocument(
   <title>${escapeHtml(title)}</title>
   <style>
     @page {
-      size: ${s.pageSize};
+      size: ${s.pageSize} ${s.orientation};
       margin: ${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm;
     }
     *, *::before, *::after { box-sizing: border-box; }
