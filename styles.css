@@ -267,3 +267,36 @@
 	}
 	.native-print-btn-row button { width: 100%; }
 }
+
+/* ── Custom Margin sub-modal blur ───────────────────────────────── */
+.native-print-preview-modal.native-print-blurred {
+	filter:         blur(4px);
+	pointer-events: none;
+	transition:     filter 0.15s;
+}
+
+/* Custom margin modal chrome */
+.np-custom-margin-modal { min-width: 260px; }
+.np-margin-val {
+	display:    inline-block;
+	min-width:  44px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	font-size:  13px;
+	font-weight:500;
+}
+.np-custom-btn-row {
+	display:         flex;
+	justify-content: flex-end;
+	gap:             8px;
+	margin-top:      16px;
+}
+.np-custom-btn-row button {
+	min-height: 36px;
+	min-width:  80px;
+	border-radius: 10px;
+	padding:    0 16px;
+	cursor:     pointer;
+	border:     none;
+	font-size:  13px;
+}

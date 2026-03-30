@@ -1,4 +1,4 @@
-import { App, Modal, Platform } from 'obsidian';
+import { App, Modal, Platform, Setting } from 'obsidian';
 import {
 	PrintPluginSettings,
 	MARGIN_PRESETS,
@@ -10,21 +10,87 @@ import { buildHelperUrl } from './html-builder';
 
 export type PrintExecutor = (html: string) => void;
 
-/**
- * PrintPreviewModal — Samsung OneUI glass frame, toolbar in the lower quarter.
- *
- * Structure (top → bottom inside contentEl):
- *   ┌─ preview area (flex-1) ───────────────────────────────────────┐
- *   │  <iframe srcdoc="...">   live-updating at 250ms debounce      │
- *   ├─ compact toolbar ─────────────────────────────────────────────┤
- *   │  Paper[▼]  Orient.[▼]  Margins[▼]  [−]11pt[+]  ◎Title ○Meta │
- *   ├─ button row ──────────────────────────────────────────────────┤
- *   │                                     [Cancel]  [🖨 Print]      │
- *   └───────────────────────────────────────────────────────────────┘
- *
- * Controls mutate a LOCAL copy of settings — nothing is persisted until
- * the user clicks Print, at which point the executor receives the final HTML.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom Margin Sub-modal
+// Opens on top of PrintPreviewModal; blurs the preview while active.
+// ─────────────────────────────────────────────────────────────────────────────
+class CustomMarginModal extends Modal {
+	private vals: { top: number; bottom: number; left: number; right: number };
+	private readonly onConfirm: (v: typeof this.vals) => void;
+	private readonly onDismiss: () => void;
+
+	constructor(
+		app: App,
+		initial: { top: number; bottom: number; left: number; right: number },
+		onConfirm: (v: typeof initial) => void,
+		onDismiss: () => void
+	) {
+		super(app);
+		this.vals      = { ...initial };
+		this.onConfirm = onConfirm;
+		this.onDismiss = onDismiss;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		this.setTitle('Custom Margins (mm)');
+		contentEl.addClass('np-custom-margin-modal');
+
+		// Four margin steppers
+		const pairs: [string, keyof typeof this.vals][] = [
+			['Top',    'top'],
+			['Bottom', 'bottom'],
+			['Left',   'left'],
+			['Right',  'right'],
+		];
+
+		for (const [label, key] of pairs) {
+			new Setting(contentEl)
+				.setName(label)
+				.addExtraButton(btn => btn.setIcon('minus')
+					.setTooltip('Decrease')
+					.onClick(() => {
+						this.vals[key] = Math.max(0, this.vals[key] - 1);
+						valEls[key].textContent = `${this.vals[key]} mm`;
+					}))
+				.addExtraButton(btn => {
+					// Render value display between buttons
+					valEls[key] = btn.extraSettingsEl.createSpan({
+						cls:  'np-margin-val',
+						text: `${this.vals[key]} mm`,
+					});
+					// Detach so it appears between the two buttons in DOM order
+					btn.extraSettingsEl.insertBefore(valEls[key], btn.extraSettingsEl.firstChild);
+					return btn.setIcon('plus')
+						.setTooltip('Increase')
+						.onClick(() => {
+							this.vals[key] = Math.min(50, this.vals[key] + 1);
+							valEls[key].textContent = `${this.vals[key]} mm`;
+						});
+				});
+		}
+
+		const btnRow = contentEl.createDiv({ cls: 'np-custom-btn-row' });
+		btnRow.createEl('button', { text: 'Cancel' })
+			.addEventListener('click', () => this.close());
+		const ok = btnRow.createEl('button', { text: 'Apply', cls: 'mod-cta' });
+		ok.addEventListener('click', () => {
+			this.onConfirm({ ...this.vals });
+			this.close();
+		});
+	}
+
+	onClose(): void {
+		this.onDismiss();
+		this.contentEl.empty();
+	}
+}
+// Pre-allocate span refs dict (filled during Setting construction)
+const valEls: Record<string, HTMLSpanElement> = {};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Print Preview Modal
+// ─────────────────────────────────────────────────────────────────────────────
 export class PrintPreviewModal extends Modal {
 	private readonly fragment: string;
 	private readonly title: string;
@@ -52,7 +118,7 @@ export class PrintPreviewModal extends Modal {
 		modalEl.addClass('native-print-preview-modal');
 		this.setTitle(`Print Preview — ${this.title}`);
 
-		// ── 1. Preview iframe (fills top ~75%) ──────────────────────────────
+		// ── 1. Preview iframe ─────────────────────────────────────────────
 		const previewArea = contentEl.createDiv({ cls: 'native-print-preview-area' });
 		this.frame = previewArea.createEl('iframe', {
 			cls:  'native-print-preview-frame',
@@ -60,10 +126,9 @@ export class PrintPreviewModal extends Modal {
 		}) as HTMLIFrameElement;
 		this.renderFrame();
 
-		// ── 2. Compact toolbar (lower quarter) ─────────────────────────────
+		// ── 2. Compact toolbar ─────────────────────────────────────────────
 		const toolbar = contentEl.createDiv({ cls: 'native-print-toolbar' });
 
-		// Paper size — compact key-only labels
 		this.addSelect(toolbar, 'Paper', {
 			A3: 'A3', A4: 'A4', A5: 'A5',
 			Letter: 'Letter', Legal: 'Legal', Tabloid: 'Tabloid',
@@ -72,7 +137,6 @@ export class PrintPreviewModal extends Modal {
 			this.scheduleRerender();
 		});
 
-		// Orientation (was in prev. iteration, re-added)
 		this.addSelect(toolbar, 'Orient.', {
 			portrait:  'Portrait',
 			landscape: 'Landscape',
@@ -81,12 +145,17 @@ export class PrintPreviewModal extends Modal {
 			this.scheduleRerender();
 		});
 
-		// Margin preset
+		// Margins — includes Custom; selecting it opens the sub-modal
 		this.addSelect(toolbar, 'Margins', {
 			normal: 'Normal',
 			narrow: 'Narrow',
 			wide:   'Wide',
-		}, this.local.marginPreset === 'custom' ? 'normal' : this.local.marginPreset, (v) => {
+			custom: 'Custom…',
+		}, this.local.marginPreset, (v) => {
+			if (v === 'custom') {
+				this.openCustomMarginModal();
+				return;
+			}
 			const key = v as MarginPreset;
 			const p   = MARGIN_PRESETS[key];
 			this.local.marginPreset = key;
@@ -97,35 +166,26 @@ export class PrintPreviewModal extends Modal {
 			this.scheduleRerender();
 		});
 
-		// Font stepper: [−] 11 pt [+]
 		this.addStepper(toolbar, 'Font (pt)', this.local.fontSize, 'pt', 8, 18, (v) => {
 			this.local.fontSize = v;
 			this.scheduleRerender();
 		});
 
-		// Title toggle
 		this.addCircleToggle(toolbar, 'Title', this.local.includeTitle, (v) => {
 			this.local.includeTitle = v;
 			this.scheduleRerender();
 		});
-
-		// Metadata toggle
 		this.addCircleToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, (v) => {
 			this.local.includeYamlFrontmatter = v;
 			this.scheduleRerender();
 		});
 
-		// ── 3. Button row ────────────────────────────────────────────────────
+		// ── 3. Button row ──────────────────────────────────────────────────
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
+		btnRow.createEl('button', { text: 'Cancel' })
+			.addEventListener('click', () => this.close());
 
-		const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
-		cancelBtn.addEventListener('click', () => this.close());
-
-		// Printer icon for both platforms — no ⬡ Android symbol
-		const printBtn = btnRow.createEl('button', {
-			cls:  'mod-cta',
-			text: '🖨  Print',
-		});
+		const printBtn = btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' });
 		printBtn.addEventListener('click', () => {
 			this.close();
 			this.onPrint(buildHelperUrl.wrapDocument(this.fragment, this.title, this.local));
@@ -137,7 +197,33 @@ export class PrintPreviewModal extends Modal {
 		this.contentEl.empty();
 	}
 
-	// ── Rendering ───────────────────────────────────────────────────────────
+	// ── Custom margin sub-modal ──────────────────────────────────────────────
+
+	private openCustomMarginModal(): void {
+		const { modalEl } = this;
+		modalEl.addClass('native-print-blurred');
+
+		new CustomMarginModal(
+			this.app,
+			{
+				top:    this.local.marginTop,
+				bottom: this.local.marginBottom,
+				left:   this.local.marginLeft,
+				right:  this.local.marginRight,
+			},
+			(v) => {
+				this.local.marginPreset = 'custom';
+				this.local.marginTop    = v.top;
+				this.local.marginBottom = v.bottom;
+				this.local.marginLeft   = v.left;
+				this.local.marginRight  = v.right;
+				this.scheduleRerender();
+			},
+			() => modalEl.removeClass('native-print-blurred')
+		).open();
+	}
+
+	// ── Rendering ────────────────────────────────────────────────────────────
 
 	private renderFrame(): void {
 		if (!this.frame) return;
@@ -149,15 +235,11 @@ export class PrintPreviewModal extends Modal {
 		this.debounceTimer = setTimeout(() => this.renderFrame(), 250);
 	}
 
-	// ── Control helpers ─────────────────────────────────────────────────────
+	// ── Control builders ─────────────────────────────────────────────────────
 
-	/** Chip-style <select> with label prefix. */
 	private addSelect(
-		parent: HTMLElement,
-		label: string,
-		options: Record<string, string>,
-		value: string,
-		onChange: (v: string) => void
+		parent: HTMLElement, label: string, options: Record<string, string>,
+		value: string, onChange: (v: string) => void
 	): void {
 		const g = parent.createDiv({ cls: 'native-print-toolbar-group' });
 		g.createSpan({ cls: 'native-print-toolbar-label', text: label });
@@ -169,59 +251,35 @@ export class PrintPreviewModal extends Modal {
 		sel.addEventListener('change', () => onChange(sel.value));
 	}
 
-	/**
-	 * Stepper in the pattern: label  [−]  value unit  [+]
-	 * Returns the value-span so the caller can update it later if needed.
-	 */
 	private addStepper(
-		parent: HTMLElement,
-		label: string,
-		initial: number,
-		unit: string,
-		min: number,
-		max: number,
-		onChange: (v: number) => void
+		parent: HTMLElement, label: string, initial: number, unit: string,
+		min: number, max: number, onChange: (v: number) => void
 	): void {
 		const g = parent.createDiv({ cls: 'native-print-toolbar-group' });
 		g.createSpan({ cls: 'native-print-toolbar-label', text: label });
-
-		let current = initial;
-
+		let cur = initial;
 		const dec = g.createEl('button', { cls: 'native-print-stepper', text: '−' });
-		const val = g.createSpan({
-			cls:  'native-print-stepper-value',
-			text: `${current} ${unit}`,
-		});
+		const val = g.createSpan({ cls: 'native-print-stepper-value', text: `${cur} ${unit}` });
 		const inc = g.createEl('button', { cls: 'native-print-stepper', text: '+' });
-
-		const update = (delta: number) => {
-			current = Math.min(max, Math.max(min, current + delta));
-			val.textContent = `${current} ${unit}`;
-			onChange(current);
+		const upd = (d: number) => {
+			cur = Math.min(max, Math.max(min, cur + d));
+			val.textContent = `${cur} ${unit}`;
+			onChange(cur);
 		};
-		dec.addEventListener('click', () => update(-1));
-		inc.addEventListener('click', () => update(+1));
+		dec.addEventListener('click', () => upd(-1));
+		inc.addEventListener('click', () => upd(+1));
 	}
 
-	/** Circle checkbox toggle: ◎ / ○ with text label. */
 	private addCircleToggle(
-		parent: HTMLElement,
-		label: string,
-		checked: boolean,
+		parent: HTMLElement, label: string, checked: boolean,
 		onChange: (v: boolean) => void
 	): void {
 		const g  = parent.createDiv({ cls: 'np-toggle-group' });
 		const id = `np-toggle-${label.toLowerCase().replace(/\s+/g, '-')}`;
-		const cb = g.createEl('input', {
-			attr: { type: 'checkbox', id },
-		}) as HTMLInputElement;
+		const cb = g.createEl('input', { attr: { type: 'checkbox', id } }) as HTMLInputElement;
 		cb.className = 'np-toggle-cb';
 		cb.checked   = checked;
-		g.createEl('label', {
-			attr: { for: id },
-			cls:  'np-toggle-text',
-			text: label,
-		});
+		g.createEl('label', { attr: { for: id }, cls: 'np-toggle-text', text: label });
 		cb.addEventListener('change', () => onChange(cb.checked));
 	}
 }

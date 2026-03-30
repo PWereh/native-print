@@ -60,13 +60,15 @@ function wrapDocument(
  * Passing HTML inline (rather than a file path) avoids all Android
  * scoped-storage permission issues on API 33+.
  */
-function toIntentUrl(base64Html: string, s: PrintPluginSettings): string {
+function toIntentUrl(base64Html: string, s: PrintPluginSettings, docTitle = 'Document'): string {
 	const settings = JSON.stringify({
-		pageSize: s.pageSize,
-		marginTop: s.marginTop,
+		pageSize:    s.pageSize,
+		orientation: s.orientation,  // → PrintAttributes.MediaSize.asLandscape/asPortrait()
+		marginTop:    s.marginTop,
 		marginBottom: s.marginBottom,
-		marginLeft: s.marginLeft,
-		marginRight: s.marginRight,
+		marginLeft:   s.marginLeft,
+		marginRight:  s.marginRight,
+		docTitle,                     // → Android print job name + PDF filename
 	});
 	return (
 		'obsidian-print-helper://print' +
