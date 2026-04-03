@@ -8,7 +8,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased — beta] — 2026-03-28
 
 ### Added
-- **Custom margin sub-modal** — selecting "Custom…" in the Margins toolbar opens
+- **Print geometry overlay** — dashed crimson guides injected into the preview
+  iframe via `@media screen` CSS (never printed):
+  - `html::before` — 1.5 px dashed crimson page boundary + four `box-shadow:
+    inset` margin-fill bands (one per side, 9 % crimson tint).
+  - `html::after` — 0.75 px dashed crimson content-area boundary, inset by
+    the current margin values.
+  - Updates **live** (250 ms debounce) on every custom-margin stepper click.
+  - Updates as a **snapshot** (single rerender) on preset and paper-size changes.
+- **Paper aspect ratio** — preview iframe `aspect-ratio` set dynamically to
+  the selected paper size + orientation (A3/A4/A5/Letter/Legal/Tabloid).
+  Iframe is centred over a neutral grey canvas; shrinks to fit available height.
+- **Design spec** — `docs/print-geometry-overlay.md` documents overlay
+  architecture, layer breakdown, color spec, z-index stack, and live/snapshot
+  behaviour table.
   a focused margin editor (Top / Bottom / Left / Right steppers). The preview
   modal blurs and becomes non-interactive while the sub-modal is active; clicking
   Apply returns to the live preview with updated values.

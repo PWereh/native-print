@@ -10,9 +10,11 @@ No file permissions required on Android (API 33+). HTML is passed inline via a c
 
 - **Desktop** — triggers `window.print()` directly
 - **Android** — renders the note to HTML and launches the Print Helper APK via a custom scheme URL
-- Live print preview with inline toolbar (paper size, margins, font, title, metadata toggles)
+- Live print preview with inline toolbar (paper size, orientation, margins, font, title, metadata toggles)
+- **Print geometry overlay** — dashed crimson page boundary and margin guides overlaid on the preview; live on custom margin edits, snapshot on preset changes
+- Scaled paper shape — preview iframe matches the selected paper's aspect ratio (A3/A4/A5/Letter/Legal/Tabloid, portrait and landscape)
 - Page sizes: A3, A4, A5, Letter, Legal, Tabloid
-- Margin presets (Normal / Narrow / Wide) plus custom sliders
+- Margin presets (Normal / Narrow / Wide) plus custom sub-modal with live mm steppers
 - Optional document title heading and YAML frontmatter in output
 - Ribbon icon + command palette entry + context menu
 
@@ -37,6 +39,8 @@ gantt
     Orientation cast to PrintAttributes    :done,    am2, 2026-03-28, 2026-03-28
     Full page-size map (A3/A5/Tabloid)     :done,    am3, 2026-03-28, 2026-03-28
     Note filename → print job name / PDF   :done,    am4, 2026-03-28, 2026-03-28
+    Print geometry overlay (crimson guides):done,    am5, 2026-04-03, 2026-04-03
+    Paper aspect ratio in preview          :done,    am6, 2026-04-03, 2026-04-03
 
     section v2.3 · Deep Settings
     Code-block text-wrap option            :active,  ds1, 2026-04-01, 2026-04-14

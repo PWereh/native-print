@@ -80,21 +80,31 @@
 
 /* ── Preview area ───────────────────────────────────────────────── */
 .native-print-preview-area {
-	flex:       1 1 auto;
-	min-height: 0;
-	background: #c8c8c8;
-	display:    flex;
-	padding:    10px;
-	overflow:   hidden;
+	flex:            1 1 auto;
+	min-height:      0;
+	background:      #b0b0b0;   /* neutral grey — represents printer tray */
+	display:         flex;
+	align-items:     center;
+	justify-content: center;
+	padding:         16px;
+	overflow:        hidden;
 }
+
+/* The iframe adopts its aspect-ratio from inline style (set by updateFrameGeometry).
+   It shrinks to fit available space while keeping the correct paper proportions.  */
 .native-print-preview-frame {
-	flex:         1 1 auto;
+	/* aspect-ratio is set dynamically via JS (e.g. "210 / 297" for A4 portrait) */
+	max-width:    100%;
+	max-height:   100%;
+	width:        auto;
+	height:       100%;
 	border:       none;
-	border-radius:8px;
+	border-radius:6px;
 	background:   #ffffff;
-	box-shadow:   0 4px 24px rgba(0, 0, 0, 0.38);
+	box-shadow:   0 2px 24px rgba(0, 0, 0, 0.45),
+	              0 0  0  1px rgba(0, 0, 0, 0.12);
 	display:      block;
-	min-height:   0;
+	flex-shrink:  0;
 }
 
 /* ── Compact toolbar (bottom quarter) ───────────────────────────── */

@@ -84,6 +84,19 @@ class CustomMarginModal extends Modal {
 // ─────────────────────────────────────────────────────────────────────────────
 // Print Preview Modal
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Physical paper dimensions in mm [width, height] (portrait orientation).
+ * Used to set the iframe's aspect-ratio so the preview matches the sheet shape.
+ */
+const PAPER_DIMS_MM: Record<string, [number, number]> = {
+	A3:      [297, 420],
+	A4:      [210, 297],
+	A5:      [148, 210],
+	Letter:  [216, 279],
+	Legal:   [216, 356],
+	Tabloid: [279, 432],
+};
+
 export class PrintPreviewModal extends Modal {
 	private readonly fragment: string;
 	private readonly title: string;
@@ -232,7 +245,20 @@ export class PrintPreviewModal extends Modal {
 
 	private renderFrame(): void {
 		if (!this.frame) return;
+		this.updateFrameGeometry();
 		this.frame.srcdoc = buildHelperUrl.wrapDocument(this.fragment, this.title, this.local);
+	}
+
+	/**
+	 * Sets the iframe's CSS aspect-ratio to match the selected paper size and
+	 * orientation. The preview area is `align-items: center` so the iframe is
+	 * automatically centred inside the grey canvas regardless of its dimensions.
+	 */
+	private updateFrameGeometry(): void {
+		if (!this.frame) return;
+		const [pw, ph] = PAPER_DIMS_MM[this.local.pageSize] ?? [210, 297];
+		const [w, h] = this.local.orientation === 'landscape' ? [ph, pw] : [pw, ph];
+		this.frame.style.aspectRatio = `${w} / ${h}`;
 	}
 
 	private scheduleRerender(): void {
