@@ -1,4 +1,4 @@
-import { App, Modal, Platform, Setting } from 'obsidian';
+import { App, Modal, Platform } from 'obsidian';
 import {
 	PrintPluginSettings,
 	MARGIN_PRESETS,
@@ -12,7 +12,6 @@ export type PrintExecutor = (html: string) => void;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Margin Sub-modal
-// Opens on top of PrintPreviewModal; blurs the preview while active.
 // ─────────────────────────────────────────────────────────────────────────────
 class CustomMarginModal extends Modal {
 	private vals: { top: number; bottom: number; left: number; right: number };
@@ -34,42 +33,38 @@ class CustomMarginModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		this.setTitle('Custom Margins (mm)');
-		contentEl.addClass('np-custom-margin-modal');
 
-		// Four margin steppers
-		const pairs: [string, keyof typeof this.vals][] = [
-			['Top',    'top'],
-			['Bottom', 'bottom'],
-			['Left',   'left'],
-			['Right',  'right'],
+		type MarginKey = 'top' | 'bottom' | 'left' | 'right';
+		const sides: { label: string; key: MarginKey }[] = [
+			{ label: 'Top',    key: 'top'    },
+			{ label: 'Bottom', key: 'bottom' },
+			{ label: 'Left',   key: 'left'   },
+			{ label: 'Right',  key: 'right'  },
 		];
 
-		for (const [label, key] of pairs) {
-			new Setting(contentEl)
-				.setName(label)
-				.addExtraButton(btn => btn.setIcon('minus')
-					.setTooltip('Decrease')
-					.onClick(() => {
-						this.vals[key] = Math.max(0, this.vals[key] - 1);
-						valEls[key].textContent = `${this.vals[key]} mm`;
-					}))
-				.addExtraButton(btn => {
-					// Render value display between buttons
-					valEls[key] = btn.extraSettingsEl.createSpan({
-						cls:  'np-margin-val',
-						text: `${this.vals[key]} mm`,
-					});
-					// Detach so it appears between the two buttons in DOM order
-					btn.extraSettingsEl.insertBefore(valEls[key], btn.extraSettingsEl.firstChild);
-					return btn.setIcon('plus')
-						.setTooltip('Increase')
-						.onClick(() => {
-							this.vals[key] = Math.min(50, this.vals[key] + 1);
-							valEls[key].textContent = `${this.vals[key]} mm`;
-						});
-				});
+		// Build a stepper row for each margin side.
+		// Layout: Label ···· [−]  18 mm  [+]
+		// Uses the same CSS classes as the toolbar steppers so styling is free.
+		for (const { label, key } of sides) {
+			const row = contentEl.createDiv({ cls: 'np-cm-row' });
+			row.createSpan({ cls: 'np-cm-label', text: label });
+
+			const dec = row.createEl('button', { cls: 'native-print-stepper', text: '−' });
+			const val = row.createSpan({
+				cls:  'native-print-stepper-value np-cm-val',
+				text: `${this.vals[key]} mm`,
+			});
+			const inc = row.createEl('button', { cls: 'native-print-stepper', text: '+' });
+
+			const update = (delta: number) => {
+				this.vals[key] = Math.min(50, Math.max(0, this.vals[key] + delta));
+				val.textContent = `${this.vals[key]} mm`;
+			};
+			dec.addEventListener('click', () => update(-1));
+			inc.addEventListener('click', () => update(+1));
 		}
 
+		// Button row
 		const btnRow = contentEl.createDiv({ cls: 'np-custom-btn-row' });
 		btnRow.createEl('button', { text: 'Cancel' })
 			.addEventListener('click', () => this.close());
@@ -85,8 +80,6 @@ class CustomMarginModal extends Modal {
 		this.contentEl.empty();
 	}
 }
-// Pre-allocate span refs dict (filled during Setting construction)
-const valEls: Record<string, HTMLSpanElement> = {};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Print Preview Modal
@@ -98,6 +91,10 @@ export class PrintPreviewModal extends Modal {
 	private local: PrintPluginSettings;
 	private frame: HTMLIFrameElement | null = null;
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Keep a ref to the Margins <select> so we can reset its displayed value
+	// after opening the Custom sub-modal (prevents the silent-re-select bug).
+	private marginsSelect: HTMLSelectElement | null = null;
 
 	constructor(
 		app: App,
@@ -118,7 +115,7 @@ export class PrintPreviewModal extends Modal {
 		modalEl.addClass('native-print-preview-modal');
 		this.setTitle(`Print Preview — ${this.title}`);
 
-		// ── 1. Preview iframe ─────────────────────────────────────────────
+		// ── 1. Preview iframe ──────────────────────────────────────────────
 		const previewArea = contentEl.createDiv({ cls: 'native-print-preview-area' });
 		this.frame = previewArea.createEl('iframe', {
 			cls:  'native-print-preview-frame',
@@ -145,8 +142,9 @@ export class PrintPreviewModal extends Modal {
 			this.scheduleRerender();
 		});
 
-		// Margins — includes Custom; selecting it opens the sub-modal
-		this.addSelect(toolbar, 'Margins', {
+		// Margins — 'custom' triggers sub-modal; stored in this.marginsSelect
+		// so we can reset the displayed value after opening the sub-modal.
+		this.marginsSelect = this.addSelect(toolbar, 'Margins', {
 			normal: 'Normal',
 			narrow: 'Narrow',
 			wide:   'Wide',
@@ -154,6 +152,14 @@ export class PrintPreviewModal extends Modal {
 		}, this.local.marginPreset, (v) => {
 			if (v === 'custom') {
 				this.openCustomMarginModal();
+				// BUG FIX: Reset the select to its last non-custom value so that
+				// choosing 'Custom…' again fires the change event next time.
+				// Without this, the select stays on 'custom' and change is silent.
+				if (this.marginsSelect) {
+					this.marginsSelect.value = this.local.marginPreset === 'custom'
+						? 'normal'
+						: this.local.marginPreset;
+				}
 				return;
 			}
 			const key = v as MarginPreset;
@@ -184,7 +190,6 @@ export class PrintPreviewModal extends Modal {
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
 		btnRow.createEl('button', { text: 'Cancel' })
 			.addEventListener('click', () => this.close());
-
 		const printBtn = btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' });
 		printBtn.addEventListener('click', () => {
 			this.close();
@@ -197,7 +202,7 @@ export class PrintPreviewModal extends Modal {
 		this.contentEl.empty();
 	}
 
-	// ── Custom margin sub-modal ──────────────────────────────────────────────
+	// ── Custom margin sub-modal ────────────────────────────────────────────────
 
 	private openCustomMarginModal(): void {
 		const { modalEl } = this;
@@ -223,7 +228,7 @@ export class PrintPreviewModal extends Modal {
 		).open();
 	}
 
-	// ── Rendering ────────────────────────────────────────────────────────────
+	// ── Rendering ──────────────────────────────────────────────────────────────
 
 	private renderFrame(): void {
 		if (!this.frame) return;
@@ -235,12 +240,17 @@ export class PrintPreviewModal extends Modal {
 		this.debounceTimer = setTimeout(() => this.renderFrame(), 250);
 	}
 
-	// ── Control builders ─────────────────────────────────────────────────────
+	// ── Control builders ──────────────────────────────────────────────────────
 
+	/**
+	 * Chip-style <select>. Returns the <select> element so callers can reset
+	 * its displayed value programmatically (e.g. after opening the custom-margin
+	 * sub-modal, to allow the same option to fire `change` on re-selection).
+	 */
 	private addSelect(
 		parent: HTMLElement, label: string, options: Record<string, string>,
 		value: string, onChange: (v: string) => void
-	): void {
+	): HTMLSelectElement {
 		const g = parent.createDiv({ cls: 'native-print-toolbar-group' });
 		g.createSpan({ cls: 'native-print-toolbar-label', text: label });
 		const sel = g.createEl('select', { cls: 'native-print-toolbar-select' });
@@ -249,6 +259,7 @@ export class PrintPreviewModal extends Modal {
 			if (k === value) opt.selected = true;
 		}
 		sel.addEventListener('change', () => onChange(sel.value));
+		return sel;
 	}
 
 	private addStepper(
