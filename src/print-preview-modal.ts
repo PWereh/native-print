@@ -7,6 +7,7 @@ import {
 	Orientation,
 } from './settings';
 import { buildHelperUrl } from './html-builder';
+import NativePrintPlugin from './main';
 
 export type PrintExecutor = (html: string) => void;
 
@@ -42,9 +43,6 @@ class CustomMarginModal extends Modal {
 			{ label: 'Right',  key: 'right'  },
 		];
 
-		// Build a stepper row for each margin side.
-		// Layout: Label ···· [−]  18 mm  [+]
-		// Uses the same CSS classes as the toolbar steppers so styling is free.
 		for (const { label, key } of sides) {
 			const row = contentEl.createDiv({ cls: 'np-cm-row' });
 			row.createSpan({ cls: 'np-cm-label', text: label });
@@ -64,7 +62,6 @@ class CustomMarginModal extends Modal {
 			inc.addEventListener('click', () => update(+1));
 		}
 
-		// Button row
 		const btnRow = contentEl.createDiv({ cls: 'np-custom-btn-row' });
 		btnRow.createEl('button', { text: 'Cancel' })
 			.addEventListener('click', () => this.close());
@@ -82,12 +79,8 @@ class CustomMarginModal extends Modal {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Print Preview Modal
+// Paper dimensions for aspect-ratio computation
 // ─────────────────────────────────────────────────────────────────────────────
-/**
- * Physical paper dimensions in mm [width, height] (portrait orientation).
- * Used to set the iframe's aspect-ratio so the preview matches the sheet shape.
- */
 const PAPER_DIMS_MM: Record<string, [number, number]> = {
 	A3:      [297, 420],
 	A4:      [210, 297],
@@ -97,16 +90,17 @@ const PAPER_DIMS_MM: Record<string, [number, number]> = {
 	Tabloid: [279, 432],
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Print Preview Modal
+// ─────────────────────────────────────────────────────────────────────────────
 export class PrintPreviewModal extends Modal {
 	private readonly fragment: string;
 	private readonly title: string;
 	private readonly onPrint: PrintExecutor;
+	private readonly plugin: NativePrintPlugin;
 	private local: PrintPluginSettings;
 	private frame: HTMLIFrameElement | null = null;
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-	// Keep a ref to the Margins <select> so we can reset its displayed value
-	// after opening the Custom sub-modal (prevents the silent-re-select bug).
 	private marginsSelect: HTMLSelectElement | null = null;
 
 	constructor(
@@ -114,12 +108,14 @@ export class PrintPreviewModal extends Modal {
 		fragment: string,
 		title: string,
 		settings: PrintPluginSettings,
-		onPrint: PrintExecutor
+		onPrint: PrintExecutor,
+		plugin: NativePrintPlugin
 	) {
 		super(app);
 		this.fragment = fragment;
 		this.title    = title;
 		this.onPrint  = onPrint;
+		this.plugin   = plugin;
 		this.local    = { ...settings };
 	}
 
@@ -155,8 +151,6 @@ export class PrintPreviewModal extends Modal {
 			this.scheduleRerender();
 		});
 
-		// Margins — 'custom' triggers sub-modal; stored in this.marginsSelect
-		// so we can reset the displayed value after opening the sub-modal.
 		this.marginsSelect = this.addSelect(toolbar, 'Margins', {
 			normal: 'Normal',
 			narrow: 'Narrow',
@@ -165,9 +159,7 @@ export class PrintPreviewModal extends Modal {
 		}, this.local.marginPreset, (v) => {
 			if (v === 'custom') {
 				this.openCustomMarginModal();
-				// BUG FIX: Reset the select to its last non-custom value so that
-				// choosing 'Custom…' again fires the change event next time.
-				// Without this, the select stays on 'custom' and change is silent.
+				// Reset select value so re-selecting 'Custom…' fires change again.
 				if (this.marginsSelect) {
 					this.marginsSelect.value = this.local.marginPreset === 'custom'
 						? 'normal'
@@ -230,11 +222,22 @@ export class PrintPreviewModal extends Modal {
 				right:  this.local.marginRight,
 			},
 			(v) => {
+				// Update local preview copy
 				this.local.marginPreset = 'custom';
 				this.local.marginTop    = v.top;
 				this.local.marginBottom = v.bottom;
 				this.local.marginLeft   = v.left;
 				this.local.marginRight  = v.right;
+
+				// Persist to plugin settings so values survive modal close,
+				// plugin reload, and app restart.
+				this.plugin.settings.marginPreset = 'custom';
+				this.plugin.settings.marginTop    = v.top;
+				this.plugin.settings.marginBottom = v.bottom;
+				this.plugin.settings.marginLeft   = v.left;
+				this.plugin.settings.marginRight  = v.right;
+				void this.plugin.saveSettings();
+
 				this.scheduleRerender();
 			},
 			() => modalEl.removeClass('native-print-blurred')
@@ -249,15 +252,10 @@ export class PrintPreviewModal extends Modal {
 		this.frame.srcdoc = buildHelperUrl.wrapDocument(this.fragment, this.title, this.local);
 	}
 
-	/**
-	 * Sets the iframe's CSS aspect-ratio to match the selected paper size and
-	 * orientation. The preview area is `align-items: center` so the iframe is
-	 * automatically centred inside the grey canvas regardless of its dimensions.
-	 */
 	private updateFrameGeometry(): void {
 		if (!this.frame) return;
 		const [pw, ph] = PAPER_DIMS_MM[this.local.pageSize] ?? [210, 297];
-		const [w, h] = this.local.orientation === 'landscape' ? [ph, pw] : [pw, ph];
+		const [w, h]   = this.local.orientation === 'landscape' ? [ph, pw] : [pw, ph];
 		this.frame.style.aspectRatio = `${w} / ${h}`;
 	}
 
@@ -268,11 +266,6 @@ export class PrintPreviewModal extends Modal {
 
 	// ── Control builders ──────────────────────────────────────────────────────
 
-	/**
-	 * Chip-style <select>. Returns the <select> element so callers can reset
-	 * its displayed value programmatically (e.g. after opening the custom-margin
-	 * sub-modal, to allow the same option to fire `change` on re-selection).
-	 */
 	private addSelect(
 		parent: HTMLElement, label: string, options: Record<string, string>,
 		value: string, onChange: (v: string) => void

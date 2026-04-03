@@ -5,10 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased — beta] — 2026-03-28
+## [Unreleased — beta] — 2026-04-03
 
-### Added
-- **Print geometry overlay** — dashed crimson guides injected into the preview
+### Fixed
+- **Content now constrained to print area** — `@media screen` adds
+  `body { padding: Tmm Rmm Bmm Lmm !important }` so preview content is
+  visually inside the margin boundary, matching actual print output.
+  (`@page` handles this at print time; the iframe does not render `@page`.)
+- **Content-area bounding box styled** — `html::after` changed from a thin
+  dashed guide to `1px solid rgba(220,20,60,0.80)` with a double 0.5 px
+  crimson glow ring and a `rgba(255,255,255,0.55)` white fill. The fill
+  separates the print zone from the 9% crimson margin tint behind it.
+- **Custom margins now persistent** — `PrintPreviewModal` receives
+  `plugin: NativePrintPlugin`. On `CustomMarginModal` Apply, margins are
+  written to both `this.local` (live preview) and `plugin.settings`
+  (persisted via `plugin.saveSettings()` → `data.json`). Values survive
+  modal close, plugin reload, and app restart.
+
+ — dashed crimson guides injected into the preview
   iframe via `@media screen` CSS (never printed):
   - `html::before` — 1.5 px dashed crimson page boundary + four `box-shadow:
     inset` margin-fill bands (one per side, 9 % crimson tint).

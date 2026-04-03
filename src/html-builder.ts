@@ -5,56 +5,53 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Generates the @media screen CSS block that overlays print geometry guides
- * inside the preview iframe. Never included in the printed output.
+ * Generates the @media screen CSS block injected into the preview iframe.
+ * Never included in printed output — scoped entirely to @media screen.
  *
- * Two-layer design (both position:fixed so they don't scroll with content):
- *
- *   html::before — page boundary + margin fill
- *     border:     1.5px dashed crimson            → page outer frame
- *     box-shadow: four inset shadows (one per margin side)
- *                                                  → margin area tint
- *
- *   html::after  — content-area boundary
- *     position:   fixed, inset by margin values   → inner dashed guide
- *     border:     0.75px dashed crimson (50% α)   → printable-area frame
- *
- * Both layers update whenever wrapDocument() is called, so:
- *   • Custom margin steppers  → live (debounced 250 ms per click)
- *   • Preset selection        → snapshot (single rerender on change)
+ * Three responsibilities:
+ *   1. body padding  — pushes content inside the margin boundary so the
+ *                      preview matches the actual printed layout exactly.
+ *   2. html::before  — page outer frame (1.5 px dashed crimson) +
+ *                      four box-shadow:inset margin-fill bands (9 % crimson).
+ *   3. html::after   — content-area inner boundary: solid crimson, 1 px,
+ *                      with a subtle crimson glow and a semi-transparent
+ *                      white fill to differentiate it from the margin zone.
  */
 function previewOverlayCss(s: PrintPluginSettings): string {
 	const { marginTop: T, marginBottom: B, marginLeft: L, marginRight: R } = s;
 	return `
-    /* ── Print geometry overlay — screen only ─────────────────────── */
     @media screen {
-      /* Ensure the html element fills the viewport so fixed children
-         have a stable reference frame inside the sandboxed iframe. */
+      /* ── Stable full-height reference for fixed children ── */
       html { min-height: 100%; }
 
-      /* ── Layer 1: page boundary frame + margin area tint ── */
+      /* ── Push content inside margin boundary ──────────────────────
+         In print, @page margin handles this. In the iframe preview
+         there is no @page rendering — body padding is the equivalent.
+         Set only in @media screen so the printed document is unaffected. */
+      body {
+        padding: ${T}mm ${R}mm ${B}mm ${L}mm !important;
+      }
+
+      /* ── Layer 1: page boundary frame + margin tint ────────────── */
       html::before {
         content: '';
         position: fixed;
         inset: 0;
-        /* Page boundary — 1.5 px dashed crimson */
         border: 1.5px dashed crimson;
-        /* Margin fill — four inset box-shadows, one per side.
-           Syntax: inset  x-offset  y-offset  blur  spread  color
-           Positive y-offset = shadow grows downward from top edge.
-           Negative y-offset = shadow grows upward from bottom edge.
-           Positive x-offset = shadow grows rightward from left edge.
-           Negative x-offset = shadow grows leftward from right edge.  */
         box-shadow:
-          inset    0          ${T}mm   0 0 rgba(220, 20, 60, 0.09),
-          inset    0         -${B}mm   0 0 rgba(220, 20, 60, 0.09),
-          inset    ${L}mm     0        0 0 rgba(220, 20, 60, 0.09),
-          inset   -${R}mm     0        0 0 rgba(220, 20, 60, 0.09);
+          inset  0        ${T}mm  0 0 rgba(220, 20, 60, 0.08),
+          inset  0       -${B}mm  0 0 rgba(220, 20, 60, 0.08),
+          inset  ${L}mm   0       0 0 rgba(220, 20, 60, 0.08),
+          inset -${R}mm   0       0 0 rgba(220, 20, 60, 0.08);
         pointer-events: none;
-        z-index: 9999;
+        z-index: 9998;
       }
 
-      /* ── Layer 2: content-area inner boundary ── */
+      /* ── Layer 2: content-area boundary ────────────────────────────
+         Solid 1 px crimson line at the margin inset + subtle glow so
+         it reads as the "safe zone" not just a decorative rule.
+         Semi-transparent white fill visually separates the content
+         zone from the margin band without hiding the tint behind it. */
       html::after {
         content: '';
         position: fixed;
@@ -62,16 +59,19 @@ function previewOverlayCss(s: PrintPluginSettings): string {
         right:  ${R}mm;
         bottom: ${B}mm;
         left:   ${L}mm;
-        border: 0.75px dashed rgba(220, 20, 60, 0.50);
+        border: 1px solid rgba(220, 20, 60, 0.80);
+        box-shadow:
+          0 0 0 0.5px rgba(220, 20, 60, 0.15),
+          inset 0 0 0 0.5px rgba(220, 20, 60, 0.15);
+        background: rgba(255, 255, 255, 0.55);
         pointer-events: none;
-        z-index: 9999;
+        z-index: 9997;
       }
     }`;
 }
 
 /**
- * Wraps a rendered HTML fragment into a complete print-ready document,
- * applying page settings from the plugin's configuration.
+ * Wraps a rendered HTML fragment into a complete print-ready document.
  */
 function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): string {
 	const titleHeading = s.includeTitle
@@ -119,8 +119,7 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
 }
 
 /**
- * Encodes the full HTML document as a base64 payload and builds the
- * custom-scheme URL that launches the Print Helper APK.
+ * Encodes the full HTML document as a base64 URL for the Android Print Helper APK.
  */
 function toIntentUrl(base64Html: string, s: PrintPluginSettings, docTitle = 'Document'): string {
 	const settings = JSON.stringify({

@@ -166,3 +166,74 @@ print styles are outside this block. At print time:
 - `html::before` and `html::after` do not render.
 - `box-shadow` on the html element is absent.
 - No crimson lines appear in the printed output or saved PDF.
+
+---
+
+## Revision: Content Fit, Inner Box Styling, Margin Persistence
+
+### Content constrained to print area
+
+`@media screen` now includes:
+
+```css
+body {
+  padding: Tmm Rmm Bmm Lmm !important;
+}
+```
+
+In print, `@page { margin }` handles content offset. The preview iframe does
+not render `@page` rules — without this padding the content runs to the iframe
+edges, visually ignoring the overlay guides. The `!important` ensures it
+overrides any note-sourced body padding without affecting the printed output,
+which remains entirely governed by `@page`.
+
+### Inner bounding box styled
+
+`html::after` changed from a thin dashed guide to a more legible treatment:
+
+```css
+html::after {
+  border: 1px solid rgba(220, 20, 60, 0.80);       /* solid, 80% crimson */
+  box-shadow:
+    0 0 0 0.5px rgba(220, 20, 60, 0.15),           /* outer glow ring    */
+    inset 0 0 0 0.5px rgba(220, 20, 60, 0.15);     /* inner glow ring    */
+  background: rgba(255, 255, 255, 0.55);           /* semi-opaque white  */
+}
+```
+
+The white fill visually separates the content zone from the 9% crimson margin
+tint behind it. The double glow ring (outer + inner 0.5px) gives the boundary
+a slight presence without competing with the page frame.
+
+**z-index hierarchy** — revised to ensure correct stacking:
+
+| z-index | Layer | Role |
+|---|---|---|
+| 9998 | `html::before` | Page frame + margin fill (on top) |
+| 9997 | `html::after` | Content boundary (below page frame) |
+| auto | `body` content | Note text |
+
+### Custom margin persistence
+
+`PrintPreviewModal` now accepts `plugin: NativePrintPlugin` as a constructor
+argument. When `CustomMarginModal.onConfirm` fires:
+
+```typescript
+// Update local preview copy (for live rerender)
+this.local.marginPreset = 'custom';
+this.local.marginTop    = v.top;
+// ...
+
+// Write through to plugin.settings + persist to data.json
+this.plugin.settings.marginPreset = 'custom';
+this.plugin.settings.marginTop    = v.top;
+// ...
+void this.plugin.saveSettings();   // fire-and-forget; no await needed in callback
+```
+
+`plugin.saveSettings()` calls Obsidian's `this.saveData(this.settings)`, which
+writes `data.json` in `.obsidian/plugins/native-print/`. The custom values are
+available via `await this.loadData()` on the next plugin load.
+
+`print-command.ts` updated to pass `plugin` as the sixth argument to
+`PrintPreviewModal`.

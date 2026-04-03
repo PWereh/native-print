@@ -74,7 +74,8 @@ async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Pr
 		fragment,
 		title,
 		settings,
-		getPrintExecutor(plugin, title)
+		getPrintExecutor(plugin, title),
+		plugin
 	).open();
 }
 
