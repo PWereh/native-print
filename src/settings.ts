@@ -5,6 +5,19 @@ export type PageSize = 'A3' | 'A4' | 'A5' | 'Letter' | 'Legal' | 'Tabloid';
 export type MarginPreset = 'normal' | 'narrow' | 'wide' | 'custom';
 export type Orientation = 'portrait' | 'landscape';
 
+/** CSS reference pixels per millimetre at 96 dpi (the web standard). */
+export const PX_PER_MM = 96 / 25.4;   // ≈ 3.7795
+
+/** Physical paper dimensions [width, height] in mm, portrait orientation. */
+export const PAGE_DIMS_MM: Record<PageSize, [number, number]> = {
+	A3:      [297, 420],
+	A4:      [210, 297],
+	A5:      [148, 210],
+	Letter:  [216, 279],
+	Legal:   [216, 356],
+	Tabloid: [279, 432],
+};
+
 export interface PrintPluginSettings {
 	pageSize: PageSize;
 	orientation: Orientation;

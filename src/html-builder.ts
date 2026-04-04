@@ -1,57 +1,76 @@
-import { PrintPluginSettings } from './settings';
+import { PrintPluginSettings, PAGE_DIMS_MM, PX_PER_MM } from './settings';
 
 function escapeHtml(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
- * Generates the @media screen CSS block injected into the preview iframe.
- * Never included in printed output — scoped entirely to @media screen.
+ * @media screen CSS injected into every srcdoc render. Never printed.
  *
- * Three responsibilities:
- *   1. body padding  — pushes content inside the margin boundary so the
- *                      preview matches the actual printed layout exactly.
- *   2. html::before  — page outer frame (1.5 px dashed crimson) +
- *                      four box-shadow:inset margin-fill bands (9 % crimson).
- *   3. html::after   — content-area inner boundary: solid crimson, 1 px,
- *                      with a subtle crimson glow and a semi-transparent
- *                      white fill to differentiate it from the margin zone.
+ * Three layers:
+ *   body          — fixed pixel width matching paper; padding = margin values
+ *   html::before  — page outer frame (1.5 px dashed crimson) + margin tint bands
+ *   html::after   — content-area inner boundary (solid crimson, glow, white fill)
+ *
+ * Page break visualisation:
+ *   html background — repeating-linear-gradient draws a 3 px crimson rule
+ *   at exactly every pageHeightPx, producing accurate page break previews.
+ *   The gradient position is independent of content so breaks are always correct.
  */
 function previewOverlayCss(s: PrintPluginSettings): string {
 	const { marginTop: T, marginBottom: B, marginLeft: L, marginRight: R } = s;
+	const [pw, ph] = PAGE_DIMS_MM[s.pageSize] ?? [210, 297];
+	const [wMm, hMm] = s.orientation === 'landscape' ? [ph, pw] : [pw, ph];
+	const paperWpx  = Math.round(wMm * PX_PER_MM);
+	const pageHpx   = Math.round(hMm * PX_PER_MM);
+
 	return `
     @media screen {
-      /* ── Stable full-height reference for fixed children ── */
-      html { min-height: 100%; }
+      /* ── Stable reference frame for all fixed children ── */
+      html {
+        min-height: 100%;
+        background-color: #fff;
 
-      /* ── Push content inside margin boundary ──────────────────────
-         In print, @page margin handles this. In the iframe preview
-         there is no @page rendering — body padding is the equivalent.
-         Set only in @media screen so the printed document is unaffected. */
-      body {
-        padding: ${T}mm ${R}mm ${B}mm ${L}mm !important;
+        /* Page break line: 3 px crimson rule, with a 1 px feather on each side.
+           Pattern repeats every pageHpx — aligns exactly with @page boundaries. */
+        background-image: repeating-linear-gradient(
+          to bottom,
+          transparent 0px,
+          transparent calc(${pageHpx}px - 2px),
+          rgba(220, 20, 60, 0.25) calc(${pageHpx}px - 2px),
+          rgba(220, 20, 60, 0.90) calc(${pageHpx}px - 1px),
+          rgba(220, 20, 60, 0.90) ${pageHpx}px,
+          rgba(220, 20, 60, 0.25) ${pageHpx}px,
+          rgba(220, 20, 60, 0.25) calc(${pageHpx}px + 1px),
+          transparent            calc(${pageHpx}px + 1px)
+        );
       }
 
-      /* ── Layer 1: page boundary frame + margin tint ────────────── */
+      /* ── Content layout at exact paper dimensions ── */
+      body {
+        width:   ${paperWpx}px !important;
+        /* Padding mirrors @page margin — in print @page handles this; the
+           iframe does not render @page, so padding is the screen equivalent. */
+        padding: ${T}mm ${R}mm ${B}mm ${L}mm !important;
+        margin:  0 !important;
+      }
+
+      /* ── Layer 1: page outer boundary + margin tint ── */
       html::before {
         content: '';
         position: fixed;
         inset: 0;
         border: 1.5px dashed crimson;
         box-shadow:
-          inset  0        ${T}mm  0 0 rgba(220, 20, 60, 0.08),
-          inset  0       -${B}mm  0 0 rgba(220, 20, 60, 0.08),
-          inset  ${L}mm   0       0 0 rgba(220, 20, 60, 0.08),
-          inset -${R}mm   0       0 0 rgba(220, 20, 60, 0.08);
+          inset  0        ${T}mm  0 0 rgba(220, 20, 60, 0.07),
+          inset  0       -${B}mm  0 0 rgba(220, 20, 60, 0.07),
+          inset  ${L}mm   0       0 0 rgba(220, 20, 60, 0.07),
+          inset -${R}mm   0       0 0 rgba(220, 20, 60, 0.07);
         pointer-events: none;
         z-index: 9998;
       }
 
-      /* ── Layer 2: content-area boundary ────────────────────────────
-         Solid 1 px crimson line at the margin inset + subtle glow so
-         it reads as the "safe zone" not just a decorative rule.
-         Semi-transparent white fill visually separates the content
-         zone from the margin band without hiding the tint behind it. */
+      /* ── Layer 2: content-area inner boundary ── */
       html::after {
         content: '';
         position: fixed;
@@ -61,9 +80,9 @@ function previewOverlayCss(s: PrintPluginSettings): string {
         left:   ${L}mm;
         border: 1px solid rgba(220, 20, 60, 0.80);
         box-shadow:
-          0 0 0 0.5px rgba(220, 20, 60, 0.15),
-          inset 0 0 0 0.5px rgba(220, 20, 60, 0.15);
-        background: rgba(255, 255, 255, 0.55);
+          0 0 0 0.5px rgba(220, 20, 60, 0.18),
+          inset 0 0 0 0.5px rgba(220, 20, 60, 0.18);
+        background: rgba(255, 255, 255, 0.50);
         pointer-events: none;
         z-index: 9997;
       }
@@ -71,7 +90,7 @@ function previewOverlayCss(s: PrintPluginSettings): string {
 }
 
 /**
- * Wraps a rendered HTML fragment into a complete print-ready document.
+ * Wraps a rendered HTML fragment into a complete, self-contained print document.
  */
 function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): string {
 	const titleHeading = s.includeTitle
@@ -119,7 +138,7 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
 }
 
 /**
- * Encodes the full HTML document as a base64 URL for the Android Print Helper APK.
+ * Builds the obsidian-print-helper:// URL that launches the Android APK.
  */
 function toIntentUrl(base64Html: string, s: PrintPluginSettings, docTitle = 'Document'): string {
 	const settings = JSON.stringify({

@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased — beta] — 2026-04-04
+
+### Changed
+- **Print preview now renders at exact paper scale** — iframe is sized to
+  physical paper dimensions (e.g. A4 = 793 × 1122 px at 96 dpi) and
+  CSS-scaled down to fit the preview area width. Content layout inside
+  the iframe matches the actual printed page exactly, not the iframe container.
+- **Page break visualisation** — `repeating-linear-gradient` on `html`
+  background draws a 3 px crimson rule (with 1 px feather) every page-height
+  interval. Page breaks are accurate: they fall at exactly every `pageHeightPx`
+  from the document origin, matching `@page` boundaries.
+- **Multi-page scroll** — preview area is now `overflow-y: auto`. After each
+  iframe load event, `onFrameLoaded()` reads `scrollHeight`, computes page
+  count, and extends the iframe + wrapper to cover all pages. Users can scroll
+  the full document.
+- **Wrapper/iframe architecture** — a `.np-frame-wrapper` div holds the scaled
+  footprint (so the scroll canvas is correct); the iframe is `position:absolute`
+  inside it at full paper size then `transform:scale()` shrinks it visually.
+- **`PAGE_DIMS_MM` and `PX_PER_MM` exported from `settings.ts`** — shared
+  between `html-builder.ts` and `print-preview-modal.ts`; previously duplicated.
+
 ## [Unreleased — beta] — 2026-04-03
 
 ### Fixed

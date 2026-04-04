@@ -78,33 +78,43 @@
 	min-height:     0 !important;
 }
 
-/* ── Preview area ───────────────────────────────────────────────── */
+/* ── Preview canvas ─────────────────────────────────────────────── */
 .native-print-preview-area {
 	flex:            1 1 auto;
 	min-height:      0;
-	background:      #b0b0b0;   /* neutral grey — represents printer tray */
+	background:      #8a8a8a;   /* printer tray grey */
 	display:         flex;
+	flex-direction:  column;    /* paper centred horizontally, scrolls vertically */
 	align-items:     center;
-	justify-content: center;
-	padding:         16px;
-	overflow:        hidden;
+	padding:         20px 16px;
+	gap:             0;
+	overflow-y:      auto;
+	overflow-x:      hidden;
 }
 
-/* The iframe adopts its aspect-ratio from inline style (set by updateFrameGeometry).
-   It shrinks to fit available space while keeping the correct paper proportions.  */
+/* Wrapper: takes the SCALED paper footprint so scrolling works correctly.
+   The iframe is absolute inside here, rendered at full paper size then scaled. */
+.np-frame-wrapper {
+	position:   relative;
+	flex-shrink: 0;
+	/* width + height set by JS (scaled paper dims) */
+	box-shadow:
+		0 4px 28px rgba(0, 0, 0, 0.55),
+		0 1px 4px  rgba(0, 0, 0, 0.30),
+		0 0 0 1px  rgba(0, 0, 0, 0.18);
+}
+
+/* Iframe: full paper size, CSS-scaled to fit preview area width.
+   position:absolute keeps it inside the wrapper without disrupting layout. */
 .native-print-preview-frame {
-	/* aspect-ratio is set dynamically via JS (e.g. "210 / 297" for A4 portrait) */
-	max-width:    100%;
-	max-height:   100%;
-	width:        auto;
-	height:       100%;
-	border:       none;
-	border-radius:6px;
-	background:   #ffffff;
-	box-shadow:   0 2px 24px rgba(0, 0, 0, 0.45),
-	              0 0  0  1px rgba(0, 0, 0, 0.12);
-	display:      block;
-	flex-shrink:  0;
+	position:         absolute;
+	top:              0;
+	left:             0;
+	border:           none;
+	background:       #ffffff;
+	display:          block;
+	transform-origin: top left;
+	/* width, height, transform applied by JS */
 }
 
 /* ── Compact toolbar (bottom quarter) ───────────────────────────── */

@@ -5,6 +5,8 @@ import {
 	MarginPreset,
 	PageSize,
 	Orientation,
+	PAGE_DIMS_MM,
+	PX_PER_MM,
 } from './settings';
 import { buildHelperUrl } from './html-builder';
 import NativePrintPlugin from './main';
@@ -46,14 +48,12 @@ class CustomMarginModal extends Modal {
 		for (const { label, key } of sides) {
 			const row = contentEl.createDiv({ cls: 'np-cm-row' });
 			row.createSpan({ cls: 'np-cm-label', text: label });
-
 			const dec = row.createEl('button', { cls: 'native-print-stepper', text: '−' });
 			const val = row.createSpan({
 				cls:  'native-print-stepper-value np-cm-val',
 				text: `${this.vals[key]} mm`,
 			});
 			const inc = row.createEl('button', { cls: 'native-print-stepper', text: '+' });
-
 			const update = (delta: number) => {
 				this.vals[key] = Math.min(50, Math.max(0, this.vals[key] + delta));
 				val.textContent = `${this.vals[key]} mm`;
@@ -65,11 +65,8 @@ class CustomMarginModal extends Modal {
 		const btnRow = contentEl.createDiv({ cls: 'np-custom-btn-row' });
 		btnRow.createEl('button', { text: 'Cancel' })
 			.addEventListener('click', () => this.close());
-		const ok = btnRow.createEl('button', { text: 'Apply', cls: 'mod-cta' });
-		ok.addEventListener('click', () => {
-			this.onConfirm({ ...this.vals });
-			this.close();
-		});
+		btnRow.createEl('button', { text: 'Apply', cls: 'mod-cta' })
+			.addEventListener('click', () => { this.onConfirm({ ...this.vals }); this.close(); });
 	}
 
 	onClose(): void {
@@ -77,18 +74,6 @@ class CustomMarginModal extends Modal {
 		this.contentEl.empty();
 	}
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Paper dimensions for aspect-ratio computation
-// ─────────────────────────────────────────────────────────────────────────────
-const PAPER_DIMS_MM: Record<string, [number, number]> = {
-	A3:      [297, 420],
-	A4:      [210, 297],
-	A5:      [148, 210],
-	Letter:  [216, 279],
-	Legal:   [216, 356],
-	Tabloid: [279, 432],
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Print Preview Modal
@@ -99,9 +84,16 @@ export class PrintPreviewModal extends Modal {
 	private readonly onPrint: PrintExecutor;
 	private readonly plugin: NativePrintPlugin;
 	private local: PrintPluginSettings;
-	private frame: HTMLIFrameElement | null = null;
+
+	private frame:   HTMLIFrameElement | null = null;
+	/** Scaled wrapper that establishes the visible footprint of the iframe. */
+	private wrapper: HTMLDivElement    | null = null;
+
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 	private marginsSelect: HTMLSelectElement | null = null;
+
+	/** The CSS scale factor applied to the iframe (paper → preview area). */
+	private scale = 1;
 
 	constructor(
 		app: App,
@@ -124,12 +116,18 @@ export class PrintPreviewModal extends Modal {
 		modalEl.addClass('native-print-preview-modal');
 		this.setTitle(`Print Preview — ${this.title}`);
 
-		// ── 1. Preview iframe ──────────────────────────────────────────────
+		// ── 1. Preview canvas + paper wrapper ─────────────────────────────
 		const previewArea = contentEl.createDiv({ cls: 'native-print-preview-area' });
-		this.frame = previewArea.createEl('iframe', {
+
+		// The wrapper is sized to scaled paper dims by JS and acts as the
+		// scroll content. The iframe is absolutely positioned inside it at
+		// full paper size, then CSS-scaled down to match.
+		this.wrapper = previewArea.createDiv({ cls: 'np-frame-wrapper' }) as HTMLDivElement;
+		this.frame   = this.wrapper.createEl('iframe', {
 			cls:  'native-print-preview-frame',
 			attr: { sandbox: 'allow-same-origin' },
 		}) as HTMLIFrameElement;
+
 		this.renderFrame();
 
 		// ── 2. Compact toolbar ─────────────────────────────────────────────
@@ -152,28 +150,21 @@ export class PrintPreviewModal extends Modal {
 		});
 
 		this.marginsSelect = this.addSelect(toolbar, 'Margins', {
-			normal: 'Normal',
-			narrow: 'Narrow',
-			wide:   'Wide',
-			custom: 'Custom…',
+			normal: 'Normal', narrow: 'Narrow', wide: 'Wide', custom: 'Custom…',
 		}, this.local.marginPreset, (v) => {
 			if (v === 'custom') {
 				this.openCustomMarginModal();
-				// Reset select value so re-selecting 'Custom…' fires change again.
 				if (this.marginsSelect) {
 					this.marginsSelect.value = this.local.marginPreset === 'custom'
-						? 'normal'
-						: this.local.marginPreset;
+						? 'normal' : this.local.marginPreset;
 				}
 				return;
 			}
 			const key = v as MarginPreset;
 			const p   = MARGIN_PRESETS[key];
-			this.local.marginPreset = key;
-			this.local.marginTop    = p.top;
-			this.local.marginBottom = p.bottom;
-			this.local.marginLeft   = p.left;
-			this.local.marginRight  = p.right;
+			this.local = { ...this.local, marginPreset: key,
+				marginTop: p.top, marginBottom: p.bottom,
+				marginLeft: p.left, marginRight: p.right };
 			this.scheduleRerender();
 		});
 
@@ -183,23 +174,21 @@ export class PrintPreviewModal extends Modal {
 		});
 
 		this.addCircleToggle(toolbar, 'Title', this.local.includeTitle, (v) => {
-			this.local.includeTitle = v;
-			this.scheduleRerender();
+			this.local.includeTitle = v; this.scheduleRerender();
 		});
 		this.addCircleToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, (v) => {
-			this.local.includeYamlFrontmatter = v;
-			this.scheduleRerender();
+			this.local.includeYamlFrontmatter = v; this.scheduleRerender();
 		});
 
 		// ── 3. Button row ──────────────────────────────────────────────────
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
 		btnRow.createEl('button', { text: 'Cancel' })
 			.addEventListener('click', () => this.close());
-		const printBtn = btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' });
-		printBtn.addEventListener('click', () => {
-			this.close();
-			this.onPrint(buildHelperUrl.wrapDocument(this.fragment, this.title, this.local));
-		});
+		btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' })
+			.addEventListener('click', () => {
+				this.close();
+				this.onPrint(buildHelperUrl.wrapDocument(this.fragment, this.title, this.local));
+			});
 	}
 
 	onClose(): void {
@@ -215,29 +204,14 @@ export class PrintPreviewModal extends Modal {
 
 		new CustomMarginModal(
 			this.app,
-			{
-				top:    this.local.marginTop,
-				bottom: this.local.marginBottom,
-				left:   this.local.marginLeft,
-				right:  this.local.marginRight,
-			},
+			{ top: this.local.marginTop, bottom: this.local.marginBottom,
+			  left: this.local.marginLeft, right: this.local.marginRight },
 			(v) => {
-				// Update local preview copy
-				this.local.marginPreset = 'custom';
-				this.local.marginTop    = v.top;
-				this.local.marginBottom = v.bottom;
-				this.local.marginLeft   = v.left;
-				this.local.marginRight  = v.right;
-
-				// Persist to plugin settings so values survive modal close,
-				// plugin reload, and app restart.
-				this.plugin.settings.marginPreset = 'custom';
-				this.plugin.settings.marginTop    = v.top;
-				this.plugin.settings.marginBottom = v.bottom;
-				this.plugin.settings.marginLeft   = v.left;
-				this.plugin.settings.marginRight  = v.right;
+				this.local = { ...this.local, marginPreset: 'custom',
+					marginTop: v.top, marginBottom: v.bottom,
+					marginLeft: v.left, marginRight: v.right };
+				this.plugin.settings = { ...this.plugin.settings, ...this.local };
 				void this.plugin.saveSettings();
-
 				this.scheduleRerender();
 			},
 			() => modalEl.removeClass('native-print-blurred')
@@ -247,16 +221,70 @@ export class PrintPreviewModal extends Modal {
 	// ── Rendering ──────────────────────────────────────────────────────────────
 
 	private renderFrame(): void {
-		if (!this.frame) return;
-		this.updateFrameGeometry();
+		if (!this.frame || !this.wrapper) return;
+
+		// Compute paper geometry first, then write srcdoc.
+		const { paperW, pageH } = this.paperPx();
+		this.applyScale(paperW, pageH);
+
+		// srcdoc write triggers iframe load event.
 		this.frame.srcdoc = buildHelperUrl.wrapDocument(this.fragment, this.title, this.local);
+
+		// After the document is fully rendered, read actual scroll height and
+		// extend the iframe + wrapper to cover all pages.
+		this.frame.addEventListener('load', () => this.onFrameLoaded(pageH), { once: true });
 	}
 
-	private updateFrameGeometry(): void {
-		if (!this.frame) return;
-		const [pw, ph] = PAPER_DIMS_MM[this.local.pageSize] ?? [210, 297];
-		const [w, h]   = this.local.orientation === 'landscape' ? [ph, pw] : [pw, ph];
-		this.frame.style.aspectRatio = `${w} / ${h}`;
+	/**
+	 * After iframe load: compute number of pages from scroll height,
+	 * resize iframe and wrapper to cover the full document.
+	 */
+	private onFrameLoaded(pageH: number): void {
+		if (!this.frame?.contentDocument || !this.wrapper) return;
+		const scrollH = this.frame.contentDocument.documentElement.scrollHeight;
+		const nPages  = Math.max(1, Math.ceil(scrollH / pageH));
+		const totalH  = pageH * nPages;
+
+		this.frame.style.height  = `${totalH}px`;
+		this.wrapper.style.height = `${Math.round(totalH * this.scale)}px`;
+	}
+
+	/**
+	 * Returns physical paper width and single-page height in CSS px (96 dpi).
+	 */
+	private paperPx(): { paperW: number; pageH: number } {
+		const [pw, ph] = PAGE_DIMS_MM[this.local.pageSize] ?? [210, 297];
+		const [wMm, hMm] = this.local.orientation === 'landscape' ? [ph, pw] : [pw, ph];
+		return {
+			paperW: Math.round(wMm * PX_PER_MM),
+			pageH:  Math.round(hMm * PX_PER_MM),
+		};
+	}
+
+	/**
+	 * Sizes the iframe to actual paper pixels, computes a fit-scale from the
+	 * available preview area width, and applies it via CSS transform.
+	 *
+	 * Wrapper gets the SCALED dimensions so the scrollable canvas reflects
+	 * the visual footprint. Iframe is position:absolute inside the wrapper,
+	 * rendered at full paper size, then CSS-scaled down.
+	 */
+	private applyScale(paperW: number, pageH: number): void {
+		if (!this.frame || !this.wrapper) return;
+
+		const area   = this.wrapper.parentElement;
+		const availW = area ? area.clientWidth - 32 : paperW; // 16 px padding each side
+		this.scale   = Math.min(1, availW / paperW);
+
+		// Set iframe to full paper size — CSS transform shrinks it visually.
+		this.frame.style.width           = `${paperW}px`;
+		this.frame.style.height          = `${pageH}px`;    // extended on load
+		this.frame.style.transform       = `scale(${this.scale})`;
+		this.frame.style.transformOrigin = 'top left';
+
+		// Wrapper holds the scaled footprint so the preview area scrolls correctly.
+		this.wrapper.style.width  = `${Math.round(paperW * this.scale)}px`;
+		this.wrapper.style.height = `${Math.round(pageH  * this.scale)}px`;
 	}
 
 	private scheduleRerender(): void {
