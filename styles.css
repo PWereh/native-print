@@ -79,46 +79,46 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   PREVIEW AREA — two-layer architecture
-   Layer 1 (z-index 1)  .np-scroll-canvas   — scrolls, behind outline
-   Layer 2 (z-index 10) .np-paper-outline   — static, never scrolls
+   PREVIEW AREA — single scroll layer
+   All children (iframe, gap bars, page overlays) sit inside one
+   scrollable wrapper. Page boundaries scroll with the content.
    ═══════════════════════════════════════════════════════════════ */
 
 .native-print-preview-area {
 	flex:       1 1 auto;
 	min-height: 0;
-	position:   relative;    /* stacking context for both layers */
-	overflow:   hidden;      /* clip layers; scroll handled by .np-scroll-canvas */
-	background: #7a7a7a;     /* printer-tray grey, visible around paper */
+	background: #7a7a7a;
+	overflow:   hidden;   /* scroll is delegated to .np-scroll-canvas */
 }
 
-/* ── Layer 1: scrollable content canvas ─────────────────────────── */
+/* ── Scroll canvas ───────────────────────────────────────────────── */
 .np-scroll-canvas {
-	position:   absolute;
-	inset:      0;
+	width:      100%;
+	height:     100%;
 	overflow-y: auto;
 	overflow-x: hidden;
-	z-index:    1;
 }
 
-/* Centering pad inside the scroll canvas.
-   padding-top = OUTLINE_TOP (20px) so page 1 aligns with the static outline. */
+/* Centering pad — aligns wrapper horizontally; provides top/bottom breathing room. */
 .np-scroll-pad {
 	display:         flex;
 	flex-direction:  column;
 	align-items:     center;
-	padding:         20px 16px 60px;
+	padding:         20px 16px 40px;
 	min-height:      100%;
 }
 
-/* Wrapper: holds the iframe (absolute, scaled) and page-gap divs (absolute).
-   Sized by JS to scaled document footprint including inter-page gaps. */
+/* ── Wrapper ─────────────────────────────────────────────────────── */
+/* position:relative — anchor point for all absolute children.
+   Sized by JS to full scaled document height + inter-page gaps.  */
 .np-frame-wrapper {
 	position:    relative;
 	flex-shrink: 0;
 }
 
-/* Iframe: full paper px, CSS-scaled, sits at top-left of wrapper. */
+/* ── Iframe ──────────────────────────────────────────────────────── */
+/* Full paper px, CSS-scaled, sits at top-left of wrapper.
+   z-index 1 — content layer (lowest).                               */
 .native-print-preview-frame {
 	position:         absolute;
 	top:              0;
@@ -127,50 +127,55 @@
 	background:       #ffffff;
 	display:          block;
 	transform-origin: top left;
+	z-index:          1;
 }
 
-/* Page gap: grey bar between pages, sits on top of iframe via z-index. */
+/* ── Page gap bar ───────────────────────────────────────────────── */
+/* Grey strip between pages. z-index 5 — above iframe, below overlays. */
 .np-page-gap {
 	position:       absolute;
 	left:           0;
-	right:          0;
-	background:     #7a7a7a;   /* same as preview canvas */
+	background:     #7a7a7a;
 	z-index:        5;
 	pointer-events: none;
 }
 
-/* ── Layer 2: static paper outline ──────────────────────────────── */
-/* Never scrolls. Centred horizontally, fixed OUTLINE_TOP px from top. */
-.np-paper-outline {
+/* ── Per-page overlay ────────────────────────────────────────────── */
+/* One per page, stacked over the iframe at each page slot.
+   Provides the paper boundary frame and clips overflow into gap areas.
+   z-index 10 — top layer.                                           */
+.np-page-overlay {
 	position:       absolute;
-	top:            20px;          /* must match .np-scroll-pad padding-top */
-	left:           50%;
-	transform:      translateX(-50%);
-	z-index:        10;
+	left:           0;
 	pointer-events: none;
+	z-index:        10;
 
-	/* Full paper boundary — dashed crimson precision lines */
-	border:        1.5px dashed rgba(220, 20, 60, 0.75);
+	/* Paper outer boundary — dashed crimson precision lines */
+	outline:        1.5px dashed rgba(220, 20, 60, 0.80);
+	outline-offset: 0;
 
-	/* Subtle shadow to lift the paper off the grey canvas */
+	/* Drop shadow to lift page off the grey canvas */
 	box-shadow:
-		0 4px 28px rgba(0, 0, 0, 0.55),
-		0 1px 4px  rgba(0, 0, 0, 0.30),
-		0 0   0 1px rgba(0, 0, 0, 0.12);
+		0 2px 16px rgba(0, 0, 0, 0.45),
+		0 1px 3px  rgba(0, 0, 0, 0.25);
 
-	/* Transparent background so scrolling content shows through */
-	background:     transparent;
+	/* Clip so overlaid content (margin guide) stays inside page bounds */
+	overflow:       hidden;
 }
 
-/* Inner margin guide inside the paper outline — marks printable area. */
+/* ── Margin guide ────────────────────────────────────────────────── */
+/* Inner rectangle marking the printable area. position:absolute inside
+   each .np-page-overlay; top/right/bottom/left set by JS.           */
 .np-margin-guide {
-	position:   absolute;
-	/* top/right/bottom/left set by JS from margin mm values */
-	border:        1px solid rgba(220, 20, 60, 0.65);
+	position:  absolute;
+	border:    1px solid rgba(220, 20, 60, 0.60);
 	box-shadow:
-		0 0 0 0.5px rgba(220, 20, 60, 0.15),
-		inset 0 0 0 0.5px rgba(220, 20, 60, 0.15);
-	pointer-events: none;
+		0 0 0 0.5px rgba(220, 20, 60, 0.18),
+		inset 0 0 0 0.5px rgba(220, 20, 60, 0.18);
+	/* Margin bands (area between page edge and guide) */
+	background: rgba(220, 20, 60, 0.05);
+	/* Invert: make the content area transparent.
+	   Achieved with a box-shadow inset fill instead of background. */
 }
 
 /* ── Compact toolbar (bottom quarter) ───────────────────────────── */

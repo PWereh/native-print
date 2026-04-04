@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased — beta] — 2026-04-04 (r3)
+
+### Changed
+- **Per-page overlays in scroll layer** — paper boundary and margin guides
+  are now `position:absolute` inside the wrapper, one per page, scrolling
+  with the content. Each `.np-page-overlay` is sized to the scaled page
+  footprint and sits at its exact page slot (`top = i × scaledPageH + i × PAGE_GAP_PX`).
+  The inner `.np-margin-guide` is positioned from mm values converted to
+  scaled screen px (`mm × PX_PER_MM × scale`).
+- **Single scroll layer** — removed the static `np-paper-outline` overlay.
+  All elements (iframe, page gap bars, page overlays) are in one
+  `.np-scroll-canvas → .np-scroll-pad → .np-frame-wrapper` hierarchy.
+- **z-index stack inside wrapper**:
+  `iframe (1) → .np-page-gap (5) → .np-page-overlay (10)`.
+  Page overlays use `outline` not `border` so they don't affect layout.
+  `overflow:hidden` on each overlay prevents content bleeding into gap areas.
+
 ## [Unreleased — beta] — 2026-04-04 (r2)
 
 ### Changed
