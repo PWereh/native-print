@@ -5,86 +5,32 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * @media screen CSS injected into every srcdoc render. Never printed.
+ * @media screen block injected into every srcdoc.
  *
- * Three layers:
- *   body          — fixed pixel width matching paper; padding = margin values
- *   html::before  — page outer frame (1.5 px dashed crimson) + margin tint bands
- *   html::after   — content-area inner boundary (solid crimson, glow, white fill)
+ * Only responsibility: force body to exact paper width and apply margin
+ * padding so content layout inside the iframe matches the printed page.
  *
- * Page break visualisation:
- *   html background — repeating-linear-gradient draws a 3 px crimson rule
- *   at exactly every pageHeightPx, producing accurate page break previews.
- *   The gradient position is independent of content so breaks are always correct.
+ * All visual overlays (page boundary, margin guides, page gap lines) are now
+ * rendered as DOM elements in the modal — NOT inside the iframe. This avoids
+ * the position:fixed problem where iframe pseudo-elements only cover the
+ * first-page viewport of a tall multi-page document.
  */
 function previewOverlayCss(s: PrintPluginSettings): string {
 	const { marginTop: T, marginBottom: B, marginLeft: L, marginRight: R } = s;
 	const [pw, ph] = PAGE_DIMS_MM[s.pageSize] ?? [210, 297];
-	const [wMm, hMm] = s.orientation === 'landscape' ? [ph, pw] : [pw, ph];
-	const paperWpx  = Math.round(wMm * PX_PER_MM);
-	const pageHpx   = Math.round(hMm * PX_PER_MM);
+	const [wMm]    = s.orientation === 'landscape' ? [ph, pw] : [pw, ph];
+	const paperWpx = Math.round(wMm * PX_PER_MM);
 
 	return `
     @media screen {
-      /* ── Stable reference frame for all fixed children ── */
-      html {
-        min-height: 100%;
-        background-color: #fff;
-
-        /* Page break line: 3 px crimson rule, with a 1 px feather on each side.
-           Pattern repeats every pageHpx — aligns exactly with @page boundaries. */
-        background-image: repeating-linear-gradient(
-          to bottom,
-          transparent 0px,
-          transparent calc(${pageHpx}px - 2px),
-          rgba(220, 20, 60, 0.25) calc(${pageHpx}px - 2px),
-          rgba(220, 20, 60, 0.90) calc(${pageHpx}px - 1px),
-          rgba(220, 20, 60, 0.90) ${pageHpx}px,
-          rgba(220, 20, 60, 0.25) ${pageHpx}px,
-          rgba(220, 20, 60, 0.25) calc(${pageHpx}px + 1px),
-          transparent            calc(${pageHpx}px + 1px)
-        );
-      }
-
-      /* ── Content layout at exact paper dimensions ── */
+      /* ── Constrain body to exact paper width ──────────────────────────
+         In print @page margin handles offsets. The iframe does not render
+         @page, so body padding is the screen equivalent.
+         Both rules are in @media screen only — printed output unaffected. */
       body {
         width:   ${paperWpx}px !important;
-        /* Padding mirrors @page margin — in print @page handles this; the
-           iframe does not render @page, so padding is the screen equivalent. */
         padding: ${T}mm ${R}mm ${B}mm ${L}mm !important;
         margin:  0 !important;
-      }
-
-      /* ── Layer 1: page outer boundary + margin tint ── */
-      html::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        border: 1.5px dashed crimson;
-        box-shadow:
-          inset  0        ${T}mm  0 0 rgba(220, 20, 60, 0.07),
-          inset  0       -${B}mm  0 0 rgba(220, 20, 60, 0.07),
-          inset  ${L}mm   0       0 0 rgba(220, 20, 60, 0.07),
-          inset -${R}mm   0       0 0 rgba(220, 20, 60, 0.07);
-        pointer-events: none;
-        z-index: 9998;
-      }
-
-      /* ── Layer 2: content-area inner boundary ── */
-      html::after {
-        content: '';
-        position: fixed;
-        top:    ${T}mm;
-        right:  ${R}mm;
-        bottom: ${B}mm;
-        left:   ${L}mm;
-        border: 1px solid rgba(220, 20, 60, 0.80);
-        box-shadow:
-          0 0 0 0.5px rgba(220, 20, 60, 0.18),
-          inset 0 0 0 0.5px rgba(220, 20, 60, 0.18);
-        background: rgba(255, 255, 255, 0.50);
-        pointer-events: none;
-        z-index: 9997;
       }
     }`;
 }
@@ -138,16 +84,13 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
 }
 
 /**
- * Builds the obsidian-print-helper:// URL that launches the Android APK.
+ * Builds the obsidian-print-helper:// URL for the Android APK.
  */
 function toIntentUrl(base64Html: string, s: PrintPluginSettings, docTitle = 'Document'): string {
 	const settings = JSON.stringify({
-		pageSize:     s.pageSize,
-		orientation:  s.orientation,
-		marginTop:    s.marginTop,
-		marginBottom: s.marginBottom,
-		marginLeft:   s.marginLeft,
-		marginRight:  s.marginRight,
+		pageSize: s.pageSize, orientation: s.orientation,
+		marginTop: s.marginTop, marginBottom: s.marginBottom,
+		marginLeft: s.marginLeft, marginRight: s.marginRight,
 		docTitle,
 	});
 	return (

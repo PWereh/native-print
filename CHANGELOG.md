@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased — beta] — 2026-04-04 (r2)
+
+### Changed
+- **Static paper bounding box** — paper outline is now `position:absolute`
+  in the preview area (z-index 10) and never scrolls. Content, page breaks,
+  and gap bars scroll behind it through `.np-scroll-canvas` (z-index 1).
+- **Two-layer canvas architecture**:
+  - `.np-scroll-canvas` (`position:absolute; inset:0; overflow-y:auto`) — the
+    scrollable layer containing the iframe wrapper and gap divs.
+  - `.np-paper-outline` (`position:absolute; z-index:10`) — static overlay
+    showing the paper boundary. Centred via `left:50%; translateX(-50%)`.
+  - `.np-margin-guide` — inner div inside the outline, positioned by JS from
+    margin mm values × scale, showing the printable-area boundary.
+- **Page-gap divs** — on iframe load, `onFrameLoaded()` injects `.np-page-gap`
+  divs (grey, `PAGE_GAP_PX = 10`) at each page break position inside the
+  wrapper. Wrapper height = scaled content + `(nPages-1) × PAGE_GAP_PX`.
+- **Removed iframe pseudo-elements** — `html::before`, `html::after`,
+  `repeating-linear-gradient` all removed from `html-builder.ts`. They caused
+  incorrect `position:fixed` behaviour in multi-page tall iframes. All visual
+  guides are now DOM elements in the modal coordinate space.
+- **`html-builder.ts` simplified** — `@media screen` block now only sets
+  `body { width: paperWpx; padding: margins; margin: 0 }` for accurate layout.
+
 ## [Unreleased — beta] — 2026-04-04
 
 ### Changed
