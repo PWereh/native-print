@@ -5,44 +5,45 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * @media screen block injected into every srcdoc.
- *
- * Only responsibility: force body to exact paper width and apply margin
- * padding so content layout inside the iframe matches the printed page.
- *
- * All visual overlays (page boundary, margin guides, page gap lines) are now
- * rendered as DOM elements in the modal — NOT inside the iframe. This avoids
- * the position:fixed problem where iframe pseudo-elements only cover the
- * first-page viewport of a tall multi-page document.
+ * @media screen block — constrains content to the print area.
+ * Body width = exact paper width; padding = margin values.
+ * overflow:hidden + per-element guards prevent any content spilling
+ * past the margin boundary in the preview.
  */
 function previewOverlayCss(s: PrintPluginSettings): string {
 	const { marginTop: T, marginBottom: B, marginLeft: L, marginRight: R } = s;
-	const [pw, ph] = PAGE_DIMS_MM[s.pageSize] ?? [210, 297];
-	const [wMm]    = s.orientation === 'landscape' ? [ph, pw] : [pw, ph];
-	const paperWpx = Math.round(wMm * PX_PER_MM);
+	const [pw, ph]   = PAGE_DIMS_MM[s.pageSize] ?? [210, 297];
+	const [wMm]      = s.orientation === 'landscape' ? [ph, pw] : [pw, ph];
+	const paperWpx   = Math.round(wMm * PX_PER_MM);
 
 	return `
     @media screen {
-      /* ── Constrain body to exact paper width ──────────────────────────
-         In print @page margin handles offsets. The iframe does not render
-         @page, so body padding is the screen equivalent.
-         Both rules are in @media screen only — printed output unaffected. */
       body {
         width:   ${paperWpx}px !important;
         padding: ${T}mm ${R}mm ${B}mm ${L}mm !important;
         margin:  0 !important;
+        /* Hard clip — nothing escapes the body box in the preview. */
+        overflow: hidden !important;
       }
+      /* Prevent wide code blocks from overflowing the content column. */
+      pre, code {
+        white-space:   pre-wrap   !important;
+        word-break:    break-all  !important;
+        overflow-x:    hidden     !important;
+      }
+      /* Tables must not push past the content width. */
+      table {
+        table-layout: fixed !important;
+        width:        100%  !important;
+      }
+      img { max-width: 100% !important; }
     }`;
 }
 
-/**
- * Wraps a rendered HTML fragment into a complete, self-contained print document.
- */
 function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): string {
 	const titleHeading = s.includeTitle
 		? `<h1 class="np-doc-title">${escapeHtml(title)}</h1>\n`
 		: '';
-
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -83,15 +84,11 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
 </html>`;
 }
 
-/**
- * Builds the obsidian-print-helper:// URL for the Android APK.
- */
 function toIntentUrl(base64Html: string, s: PrintPluginSettings, docTitle = 'Document'): string {
 	const settings = JSON.stringify({
 		pageSize: s.pageSize, orientation: s.orientation,
 		marginTop: s.marginTop, marginBottom: s.marginBottom,
-		marginLeft: s.marginLeft, marginRight: s.marginRight,
-		docTitle,
+		marginLeft: s.marginLeft, marginRight: s.marginRight, docTitle,
 	});
 	return (
 		'obsidian-print-helper://print' +

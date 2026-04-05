@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased — beta] — 2026-04-05
+
+### Added
+- **Engineering corner targets** — four 22×22 px crosshair markers at the
+  corners of the print-area boundary. Two CSS background-image gradients
+  draw the 1.5 px H/V lines; `::after` draws a 7 px circle with white fill
+  at the intersection. Tone: `rgba(160,30,30,0.90)` — slightly darker and
+  heavier than the margin guide border.
+- **Diagonal hatching on margin bands** — four `.np-margin-band` divs cover
+  each margin side. Background: light grey `rgba(195,195,200,0.55)` +
+  `repeating-linear-gradient(-45deg, …)` at 5 px pitch, 1 px dark stroke.
+  Print area centre has no band, so the iframe content shows through cleanly.
+- **Disappearing page counter** — glass/mica `div.np-page-counter` absolutely
+  positioned on the preview area (z-index 100). Appears on scroll
+  (`np-pc-visible` → `opacity:1`), fades out 1.6 s after last scroll event.
+  Format: `currentPage / totalPages`. Mica finish: `backdrop-filter:blur(22px)
+  saturate(1.7)`, dark translucent bg, pill border-radius.
+
+### Fixed
+- **Content overflow into margins** — `html-builder.ts` `@media screen` block
+  now adds `overflow:hidden !important` to `body`, `pre/code { white-space:
+  pre-wrap; word-break:break-all; overflow-x:hidden }`, `table { table-layout:
+  fixed }`, `img { max-width:100% }`. No content escapes the print area in the
+  preview.
+
 ## [Unreleased — beta] — 2026-04-04 (r3)
 
 ### Changed

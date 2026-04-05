@@ -80,15 +80,14 @@
 
 /* ═══════════════════════════════════════════════════════════════
    PREVIEW AREA — single scroll layer
-   All children (iframe, gap bars, page overlays) sit inside one
-   scrollable wrapper. Page boundaries scroll with the content.
    ═══════════════════════════════════════════════════════════════ */
 
 .native-print-preview-area {
 	flex:       1 1 auto;
 	min-height: 0;
+	position:   relative;   /* anchor for .np-page-counter */
 	background: #7a7a7a;
-	overflow:   hidden;   /* scroll is delegated to .np-scroll-canvas */
+	overflow:   hidden;
 }
 
 /* ── Scroll canvas ───────────────────────────────────────────────── */
@@ -99,7 +98,7 @@
 	overflow-x: hidden;
 }
 
-/* Centering pad — aligns wrapper horizontally; provides top/bottom breathing room. */
+/* Centering pad — flex column, centres wrapper horizontally. */
 .np-scroll-pad {
 	display:         flex;
 	flex-direction:  column;
@@ -109,16 +108,16 @@
 }
 
 /* ── Wrapper ─────────────────────────────────────────────────────── */
-/* position:relative — anchor point for all absolute children.
-   Sized by JS to full scaled document height + inter-page gaps.  */
 .np-frame-wrapper {
 	position:    relative;
 	flex-shrink: 0;
+	/* Drop shadow on the paper stack */
+	filter: drop-shadow(0 3px 14px rgba(0,0,0,0.55))
+	        drop-shadow(0 1px 3px rgba(0,0,0,0.28));
 }
 
 /* ── Iframe ──────────────────────────────────────────────────────── */
-/* Full paper px, CSS-scaled, sits at top-left of wrapper.
-   z-index 1 — content layer (lowest).                               */
+/* z-index 1 — content layer. */
 .native-print-preview-frame {
 	position:         absolute;
 	top:              0;
@@ -131,7 +130,7 @@
 }
 
 /* ── Page gap bar ───────────────────────────────────────────────── */
-/* Grey strip between pages. z-index 5 — above iframe, below overlays. */
+/* z-index 5 — above iframe, below overlays. */
 .np-page-gap {
 	position:       absolute;
 	left:           0;
@@ -141,41 +140,133 @@
 }
 
 /* ── Per-page overlay ────────────────────────────────────────────── */
-/* One per page, stacked over the iframe at each page slot.
-   Provides the paper boundary frame and clips overflow into gap areas.
-   z-index 10 — top layer.                                           */
+/* Transparent container — clips content to page, holds margin bands
+   and margin guide. z-index 10. */
 .np-page-overlay {
 	position:       absolute;
 	left:           0;
 	pointer-events: none;
 	z-index:        10;
-
-	/* Paper outer boundary — dashed crimson precision lines */
-	outline:        1.5px dashed rgba(220, 20, 60, 0.80);
-	outline-offset: 0;
-
-	/* Drop shadow to lift page off the grey canvas */
-	box-shadow:
-		0 2px 16px rgba(0, 0, 0, 0.45),
-		0 1px 3px  rgba(0, 0, 0, 0.25);
-
-	/* Clip so overlaid content (margin guide) stays inside page bounds */
-	overflow:       hidden;
+	overflow:       hidden;   /* hard clip — no content into margins */
 }
 
-/* ── Margin guide ────────────────────────────────────────────────── */
-/* Inner rectangle marking the printable area. position:absolute inside
-   each .np-page-overlay; top/right/bottom/left set by JS.           */
+/* ── Margin bands (engineering hatching) ─────────────────────────── */
+/* Four bands cover the four margin areas. The centre (print area) has
+   no band, so the white iframe content shows through cleanly.
+   Professional engineering greyscale: light grey base + 45° dark
+   diagonal lines at 5 px pitch, 1 px stroke weight.                 */
+.np-margin-band {
+	position: absolute;
+	background-color: rgba(195, 195, 200, 0.55);
+	background-image: repeating-linear-gradient(
+		-45deg,
+		transparent         0px,
+		transparent         4px,
+		rgba(40, 40, 50, 0.18) 4px,
+		rgba(40, 40, 50, 0.18) 5px
+	);
+}
+
+/* ── Margin guide — print-area boundary ─────────────────────────── */
+/* Position set by JS. No background (transparent to print area).
+   Solid border marks the safe-zone edge.                             */
 .np-margin-guide {
-	position:  absolute;
-	border:    1px solid rgba(220, 20, 60, 0.60);
+	position:       absolute;
+	border:         1px solid rgba(180, 40, 40, 0.72);
 	box-shadow:
-		0 0 0 0.5px rgba(220, 20, 60, 0.18),
-		inset 0 0 0 0.5px rgba(220, 20, 60, 0.18);
-	/* Margin bands (area between page edge and guide) */
-	background: rgba(220, 20, 60, 0.05);
-	/* Invert: make the content area transparent.
-	   Achieved with a box-shadow inset fill instead of background. */
+		0 0 0 0.5px rgba(180, 40, 40, 0.18),
+		inset 0 0 0 0.5px rgba(180, 40, 40, 0.18);
+}
+
+/* ── Corner targets — engineering crosshair + circle ────────────── */
+/* Each corner-target div is CT_SIZE × CT_SIZE (22 px), centred on
+   the margin-guide corner via negative offset.
+   Crosshair drawn with two background-image linear-gradients.
+   Circle drawn with ::after pseudo-element.                          */
+.np-corner-target {
+	position: absolute;
+	width:    22px;
+	height:   22px;
+	pointer-events: none;
+
+	/* ── Crosshair lines ── */
+	/* Horizontal 1.5 px bar through vertical centre */
+	background-image:
+		linear-gradient(to right,
+			rgba(160, 30, 30, 0.90) 0%, rgba(160, 30, 30, 0.90) 100%),
+		/* Vertical 1.5 px bar through horizontal centre */
+		linear-gradient(to bottom,
+			rgba(160, 30, 30, 0.90) 0%, rgba(160, 30, 30, 0.90) 100%);
+	background-size:
+		100% 1.5px,
+		1.5px 100%;
+	background-repeat: no-repeat;
+	background-position:
+		center center,
+		center center;
+}
+
+/* Circle at crosshair intersection */
+.np-corner-target::after {
+	content:   '';
+	position:  absolute;
+	top:       50%;
+	left:      50%;
+	transform: translate(-50%, -50%);
+	width:     7px;
+	height:    7px;
+	border-radius: 50%;
+	border:    1.5px solid rgba(160, 30, 30, 0.88);
+	background: rgba(255, 255, 255, 0.70);  /* white fill — lifts circle off content */
+}
+
+/* Clip crosshair lines to within the corner target box.
+   Inner 7 px gap around the circle centre is masked by ::after. */
+
+/* Corner positions: each div offset −CT_HALF from the guide corner. */
+.np-ct-tl { top:  -11px; left:  -11px; }
+.np-ct-tr { top:  -11px; right: -11px; }
+.np-ct-bl { bottom: -11px; left:  -11px; }
+.np-ct-br { bottom: -11px; right: -11px; }
+
+/* ── Page number counter ─────────────────────────────────────────── */
+/* Floating glass popup, absolute on .native-print-preview-area.
+   Hidden by default; .np-pc-visible fades it in; JS removes the
+   class after 1.6 s to trigger the fade-out transition.             */
+.np-page-counter {
+	position:       absolute;
+	top:            12px;
+	left:           50%;
+	transform:      translateX(-50%);
+	z-index:        100;
+	pointer-events: none;
+	white-space:    nowrap;
+
+	/* Mica / glass finish */
+	background:         rgba(18, 18, 26, 0.70);
+	backdrop-filter:    blur(22px) saturate(1.7);
+	-webkit-backdrop-filter: blur(22px) saturate(1.7);
+	border:             1px solid rgba(255, 255, 255, 0.13);
+	border-radius:      24px;
+	padding:            5px 18px;
+	box-shadow:
+		0 4px 20px rgba(0, 0, 0, 0.40),
+		0 1px 0    rgba(255, 255, 255, 0.06) inset;
+
+	/* Typography */
+	color:              rgba(255, 255, 255, 0.88);
+	font-size:          12.5px;
+	font-weight:        500;
+	font-variant-numeric: tabular-nums;
+	letter-spacing:     0.03em;
+
+	/* Fade transition */
+	opacity:            0;
+	transition:         opacity 0.18s ease;
+}
+
+.np-page-counter.np-pc-visible {
+	opacity: 1;
 }
 
 /* ── Compact toolbar (bottom quarter) ───────────────────────────── */

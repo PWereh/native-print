@@ -1,4 +1,4 @@
-import { App, Modal, Platform } from 'obsidian';
+import { App, Modal } from 'obsidian';
 import {
 	PrintPluginSettings, MARGIN_PRESETS, MarginPreset,
 	PageSize, Orientation, PAGE_DIMS_MM, PX_PER_MM,
@@ -8,10 +8,10 @@ import NativePrintPlugin from './main';
 
 export type PrintExecutor = (html: string) => void;
 
-/** Vertical gap between scaled pages (screen px). */
-const PAGE_GAP_PX = 12;
-/** Padding above the first page and below the last inside the scroll canvas. */
-const CANVAS_PAD  = 20;
+const PAGE_GAP_PX  = 12;   // grey gap between pages (screen px)
+const CANVAS_PAD   = 20;   // top/side breathing room in scroll canvas
+const CT_SIZE      = 22;   // corner-target bounding box (px)
+const CT_HALF      = CT_SIZE / 2;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Margin Sub-modal
@@ -20,19 +20,13 @@ class CustomMarginModal extends Modal {
 	private vals: { top: number; bottom: number; left: number; right: number };
 	private readonly onConfirm: (v: typeof this.vals) => void;
 	private readonly onDismiss: () => void;
-
-	constructor(
-		app: App,
-		initial: { top: number; bottom: number; left: number; right: number },
-		onConfirm: (v: typeof initial) => void,
-		onDismiss: () => void
-	) {
+	constructor(app: App, initial: typeof CustomMarginModal.prototype.vals,
+		onConfirm: (v: typeof initial) => void, onDismiss: () => void) {
 		super(app);
 		this.vals = { ...initial };
 		this.onConfirm = onConfirm;
 		this.onDismiss = onDismiss;
 	}
-
 	onOpen(): void {
 		const { contentEl } = this;
 		this.setTitle('Custom Margins (mm)');
@@ -56,7 +50,6 @@ class CustomMarginModal extends Modal {
 		btnRow.createEl('button', { text: 'Apply', cls: 'mod-cta' })
 			.addEventListener('click', () => { this.onConfirm({ ...this.vals }); this.close(); });
 	}
-
 	onClose(): void { this.onDismiss(); this.contentEl.empty(); }
 }
 
@@ -64,26 +57,27 @@ class CustomMarginModal extends Modal {
 // Print Preview Modal
 // ─────────────────────────────────────────────────────────────────────────────
 export class PrintPreviewModal extends Modal {
-	private readonly fragment: string;
-	private readonly title:    string;
-	private readonly onPrint:  PrintExecutor;
-	private readonly plugin:   NativePrintPlugin;
+	private readonly fragment:  string;
+	private readonly title:     string;
+	private readonly onPrint:   PrintExecutor;
+	private readonly plugin:    NativePrintPlugin;
 	private local: PrintPluginSettings;
 
 	private frame:        HTMLIFrameElement | null = null;
-	/** Scroll wrapper — position:relative; sized to hold all pages + gaps. */
 	private wrapper:      HTMLDivElement    | null = null;
-	/** Scroll canvas — the overflow:auto container. */
 	private scrollCanvas: HTMLDivElement    | null = null;
+	private pageCounter:  HTMLDivElement    | null = null;
 
-	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-	private marginsSelect: HTMLSelectElement | null = null;
-	private scale = 1;
+	private debounceTimer:   ReturnType<typeof setTimeout> | null = null;
+	private scrollFadeTimer: ReturnType<typeof setTimeout> | null = null;
+	private marginsSelect:   HTMLSelectElement | null = null;
 
-	constructor(
-		app: App, fragment: string, title: string,
-		settings: PrintPluginSettings, onPrint: PrintExecutor, plugin: NativePrintPlugin
-	) {
+	private scale     = 1;
+	private scaledPH  = 0;   // one page height in screen px (set in onFrameLoaded)
+	private nPages    = 1;   // updated in onFrameLoaded
+
+	constructor(app: App, fragment: string, title: string,
+		settings: PrintPluginSettings, onPrint: PrintExecutor, plugin: NativePrintPlugin) {
 		super(app);
 		this.fragment = fragment; this.title  = title;
 		this.onPrint  = onPrint;  this.plugin = plugin;
@@ -98,17 +92,18 @@ export class PrintPreviewModal extends Modal {
 		// ── 1. Preview area ────────────────────────────────────────────────
 		const previewArea = contentEl.createDiv({ cls: 'native-print-preview-area' });
 
-		// Single scroll canvas — everything is inside this.
 		this.scrollCanvas = previewArea.createDiv({ cls: 'np-scroll-canvas' });
-		// Centering flex pad with breathing room top + bottom.
-		const scrollPad = this.scrollCanvas.createDiv({ cls: 'np-scroll-pad' });
-		// Wrapper: position:relative, sized by JS to total document height
-		// including inter-page gaps. All children (iframe, gap bars, page
-		// overlays) are position:absolute inside here.
-		this.wrapper = scrollPad.createDiv({ cls: 'np-frame-wrapper' });
-		this.frame   = this.wrapper.createEl('iframe', {
+		const scrollPad   = this.scrollCanvas.createDiv({ cls: 'np-scroll-pad' });
+		this.wrapper      = scrollPad.createDiv({ cls: 'np-frame-wrapper' });
+		this.frame        = this.wrapper.createEl('iframe', {
 			cls: 'native-print-preview-frame', attr: { sandbox: 'allow-same-origin' },
 		}) as HTMLIFrameElement;
+
+		// ── Page number counter (glass popup, fades out after scroll) ──────
+		this.pageCounter = previewArea.createDiv({ cls: 'np-page-counter' });
+		this.pageCounter.textContent = '1 / 1';
+
+		this.scrollCanvas.addEventListener('scroll', () => this.onScroll());
 
 		this.renderFrame();
 
@@ -154,8 +149,24 @@ export class PrintPreviewModal extends Modal {
 	}
 
 	onClose(): void {
-		if (this.debounceTimer) clearTimeout(this.debounceTimer);
+		if (this.debounceTimer)   clearTimeout(this.debounceTimer);
+		if (this.scrollFadeTimer) clearTimeout(this.scrollFadeTimer);
 		this.contentEl.empty();
+	}
+
+	// ── Page counter scroll handler ────────────────────────────────────────────
+
+	private onScroll(): void {
+		if (!this.scrollCanvas || !this.pageCounter || this.scaledPH === 0) return;
+		const scrollTop  = this.scrollCanvas.scrollTop;
+		const slotH      = this.scaledPH + PAGE_GAP_PX;
+		const currentPg  = Math.min(this.nPages, Math.floor(scrollTop / slotH) + 1);
+		this.pageCounter.textContent = `${currentPg} / ${this.nPages}`;
+		this.pageCounter.classList.add('np-pc-visible');
+		if (this.scrollFadeTimer) clearTimeout(this.scrollFadeTimer);
+		this.scrollFadeTimer = setTimeout(() => {
+			this.pageCounter?.classList.remove('np-pc-visible');
+		}, 1600);
 	}
 
 	// ── Custom margin sub-modal ────────────────────────────────────────────────
@@ -183,52 +194,37 @@ export class PrintPreviewModal extends Modal {
 		if (!this.frame || !this.wrapper) return;
 		const { paperW, pageH } = this.paperPx();
 		this.applyScale(paperW, pageH);
-		// Write srcdoc — triggers iframe 'load' event.
 		this.frame.srcdoc = buildHelperUrl.wrapDocument(this.fragment, this.title, this.local);
 		this.frame.addEventListener('load', () => this.onFrameLoaded(paperW, pageH), { once: true });
 	}
 
-	/**
-	 * After iframe loads:
-	 * 1. Measure scrollHeight → compute page count.
-	 * 2. Extend iframe height to cover all pages.
-	 * 3. Size wrapper to include inter-page gaps.
-	 * 4. Inject page-gap bars + per-page overlay divs (boundary + margin guide).
-	 *
-	 * All injected children are position:absolute inside the wrapper so they
-	 * scroll together with the iframe content — accurately aligned to each page.
-	 */
 	private onFrameLoaded(paperW: number, pageH: number): void {
 		if (!this.frame?.contentDocument || !this.wrapper) return;
 
-		const scrollH  = this.frame.contentDocument.documentElement.scrollHeight;
-		const nPages   = Math.max(1, Math.ceil(scrollH / pageH));
-		const totalH   = nPages * pageH;                       // full iframe height (px)
-		const scaledPH = Math.round(pageH   * this.scale);     // one page in screen px
-		const scaledPW = Math.round(paperW  * this.scale);     // paper width in screen px
+		const scrollH   = this.frame.contentDocument.documentElement.scrollHeight;
+		this.nPages     = Math.max(1, Math.ceil(scrollH / pageH));
+		const totalH    = this.nPages * pageH;
+		this.scaledPH   = Math.round(pageH  * this.scale);
+		const scaledPW  = Math.round(paperW * this.scale);
 
-		// Remove stale injected children (keep only the iframe).
 		this.wrapper.querySelectorAll('.np-page-gap, .np-page-overlay').forEach(el => el.remove());
 
-		// Extend iframe to full document height.
 		this.frame.style.height = `${totalH}px`;
 
 		// Wrapper height = all scaled pages + inter-page gaps.
-		const totalScaledH = Math.round(totalH * this.scale) + (nPages - 1) * PAGE_GAP_PX;
-		this.wrapper.style.height = `${totalScaledH}px`;
+		this.wrapper.style.height = `${this.scaledPH * this.nPages + PAGE_GAP_PX * (this.nPages - 1)}px`;
 
-		// Precompute margin offsets in scaled screen px.
+		// Margin offsets in scaled screen px.
 		const { marginTop: T, marginBottom: B, marginLeft: L, marginRight: R } = this.local;
 		const mT = Math.round(T * PX_PER_MM * this.scale);
 		const mB = Math.round(B * PX_PER_MM * this.scale);
 		const mL = Math.round(L * PX_PER_MM * this.scale);
 		const mR = Math.round(R * PX_PER_MM * this.scale);
 
-		for (let i = 0; i < nPages; i++) {
-			// Top edge of this page slot in screen px (includes prior gaps).
-			const slotTop = i * scaledPH + i * PAGE_GAP_PX;
+		for (let i = 0; i < this.nPages; i++) {
+			const slotTop = i * this.scaledPH + i * PAGE_GAP_PX;
 
-			// ── Page gap bar (between pages, not after the last) ──────────
+			// ── Page gap ──────────────────────────────────────────────────
 			if (i > 0) {
 				const gap = this.wrapper.createDiv({ cls: 'np-page-gap' });
 				gap.style.top    = `${slotTop - PAGE_GAP_PX}px`;
@@ -236,45 +232,68 @@ export class PrintPreviewModal extends Modal {
 				gap.style.width  = `${scaledPW}px`;
 			}
 
-			// ── Per-page overlay (boundary + margin guide) ────────────────
+			// ── Page overlay ──────────────────────────────────────────────
+			// The overlay is fully transparent — it clips content and holds
+			// the margin bands and margin guide as children.
 			const overlay = this.wrapper.createDiv({ cls: 'np-page-overlay' });
 			overlay.style.top    = `${slotTop}px`;
 			overlay.style.width  = `${scaledPW}px`;
-			overlay.style.height = `${scaledPH}px`;
+			overlay.style.height = `${this.scaledPH}px`;
 
-			// Inner margin guide: positioned by mm values scaled to screen px.
+			// ── Four margin bands (hatching over the margin area) ─────────
+			// Each band covers one margin side; centre remains transparent
+			// so the iframe content shows through the print area cleanly.
+			type Band = { cls: string; t?: string; r?: string; b?: string; l?: string; w?: string; h?: string };
+			const bands: Band[] = [
+				{ cls: 'np-mb-top',    t: '0',       l: '0',       r: '0',       h: `${mT}px`                       },
+				{ cls: 'np-mb-bottom', b: '0',       l: '0',       r: '0',       h: `${mB}px`                       },
+				{ cls: 'np-mb-left',   t: `${mT}px`, b: `${mB}px`, l: '0',       w: `${mL}px`                       },
+				{ cls: 'np-mb-right',  t: `${mT}px`, b: `${mB}px`, r: '0',       w: `${mR}px`                       },
+			];
+			for (const b of bands) {
+				const el = overlay.createDiv({ cls: `np-margin-band ${b.cls}` });
+				if (b.t !== undefined) el.style.top    = b.t;
+				if (b.b !== undefined) el.style.bottom = b.b;
+				if (b.l !== undefined) el.style.left   = b.l;
+				if (b.r !== undefined) el.style.right  = b.r;
+				if (b.w !== undefined) el.style.width  = b.w;
+				if (b.h !== undefined) el.style.height = b.h;
+			}
+
+			// ── Margin guide — content-area boundary + corner targets ─────
 			const guide = overlay.createDiv({ cls: 'np-margin-guide' });
 			guide.style.top    = `${mT}px`;
 			guide.style.right  = `${mR}px`;
 			guide.style.bottom = `${mB}px`;
 			guide.style.left   = `${mL}px`;
+
+			// Inject one corner-target div per corner.
+			// Each carries the crosshair (via CSS background) + circle (::after).
+			// Offset by −CT_HALF so the intersection sits exactly on the guide corner.
+			(['np-ct-tl', 'np-ct-tr', 'np-ct-bl', 'np-ct-br'] as const)
+				.forEach(cls => guide.createDiv({ cls: `np-corner-target ${cls}` }));
 		}
+
+		// Initialise counter text.
+		if (this.pageCounter) this.pageCounter.textContent = `1 / ${this.nPages}`;
 	}
 
-	/** Physical paper width and single-page height in CSS px at 96 dpi. */
 	private paperPx(): { paperW: number; pageH: number } {
 		const [pw, ph]   = PAGE_DIMS_MM[this.local.pageSize] ?? [210, 297];
 		const [wMm, hMm] = this.local.orientation === 'landscape' ? [ph, pw] : [pw, ph];
 		return { paperW: Math.round(wMm * PX_PER_MM), pageH: Math.round(hMm * PX_PER_MM) };
 	}
 
-	/**
-	 * Computes fit-scale, sizes iframe to full paper px, CSS-scales it,
-	 * and sets wrapper to the single-page scaled footprint (extended on load).
-	 */
 	private applyScale(paperW: number, pageH: number): void {
 		if (!this.frame || !this.wrapper || !this.scrollCanvas) return;
 		const availW = this.scrollCanvas.clientWidth - CANVAS_PAD * 2;
 		this.scale   = Math.min(1, availW > 0 ? availW / paperW : 1);
-
 		this.frame.style.width           = `${paperW}px`;
-		this.frame.style.height          = `${pageH}px`;   // extended in onFrameLoaded
+		this.frame.style.height          = `${pageH}px`;
 		this.frame.style.transform       = `scale(${this.scale})`;
 		this.frame.style.transformOrigin = 'top left';
-
-		// Set wrapper to single-page footprint initially; extended in onFrameLoaded.
-		this.wrapper.style.width  = `${Math.round(paperW * this.scale)}px`;
-		this.wrapper.style.height = `${Math.round(pageH  * this.scale)}px`;
+		this.wrapper.style.width         = `${Math.round(paperW * this.scale)}px`;
+		this.wrapper.style.height        = `${Math.round(pageH  * this.scale)}px`;
 	}
 
 	private scheduleRerender(): void {
