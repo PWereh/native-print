@@ -4,12 +4,6 @@ function escapeHtml(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/**
- * @media screen block — constrains content to the print area.
- * Body width = exact paper width; padding = margin values.
- * overflow:hidden + per-element guards prevent any content spilling
- * past the margin boundary in the preview.
- */
 function previewOverlayCss(s: PrintPluginSettings): string {
 	const { marginTop: T, marginBottom: B, marginLeft: L, marginRight: R } = s;
 	const [pw, ph]   = PAGE_DIMS_MM[s.pageSize] ?? [210, 297];
@@ -18,25 +12,35 @@ function previewOverlayCss(s: PrintPluginSettings): string {
 
 	return `
     @media screen {
+      /* ── Content area exact to paper ──────────────────────────────── */
       body {
         width:   ${paperWpx}px !important;
         padding: ${T}mm ${R}mm ${B}mm ${L}mm !important;
         margin:  0 !important;
-        /* Hard clip — nothing escapes the body box in the preview. */
         overflow: hidden !important;
+        /* Contain all children: nothing grows beyond the body box. */
+        max-width: ${paperWpx}px !important;
       }
-      /* Prevent wide code blocks from overflowing the content column. */
-      pre, code {
-        white-space:   pre-wrap   !important;
-        word-break:    break-all  !important;
-        overflow-x:    hidden     !important;
+      /* Constrain every direct block-level child to the content width. */
+      body > * {
+        max-width: 100% !important;
+        overflow:  hidden !important;
       }
-      /* Tables must not push past the content width. */
+      /* Code: wrap aggressively — never extend past content column. */
+      pre, code, kbd, samp {
+        white-space: pre-wrap  !important;
+        word-break:  break-all !important;
+        overflow-x:  hidden    !important;
+        max-width:   100%      !important;
+      }
+      /* Tables: fixed layout prevents table cells from stretching. */
       table {
-        table-layout: fixed !important;
-        width:        100%  !important;
+        table-layout: fixed  !important;
+        width:        100%   !important;
+        overflow:     hidden !important;
       }
-      img { max-width: 100% !important; }
+      td, th { overflow: hidden !important; word-break: break-word !important; }
+      img    { max-width: 100% !important; height: auto !important; }
     }`;
 }
 

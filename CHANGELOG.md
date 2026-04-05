@@ -5,6 +5,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased — beta] — 2026-04-05 (r2)
+
+### Fixed
+- **Content no longer spills into margins** — `.np-margin-band` now uses
+  `background-color: #ffffff` (solid white, matches paper) as the base.
+  Any iframe content overflowing past `body { padding }` is completely
+  hidden under the opaque white band. Engineering diagonal hatch rendered
+  on top with `repeating-linear-gradient(-45deg, …)` at 4.5 px pitch.
+- **Corner circle line weight reduced** — `.np-corner-target::after` border
+  changed from `1.5px` to `1px solid rgba(160,30,30,0.80)`. Lighter,
+  more precise feel matching the crosshair weight.
+
+### Added
+- **Sliders in custom margin sub-modal** — each margin row now contains a
+  full-width `<input type="range" min="0" max="50">` below the stepper
+  buttons. Slider and steppers are bidirectionally synced; moving either
+  updates both controls and the live preview.
+- **Custom margin memory across preset switches** — `savedCustomMargins`
+  field in `PrintPreviewModal` seeds from `plugin.settings` on open (if
+  `marginPreset === 'custom'`) and is updated on every Apply. Opening
+  "Custom…" always restores the last user-typed values, even after
+  temporarily switching to Normal/Narrow/Wide and back.
+- **Save on Print** — clicking 🖨 Print now writes the full `this.local`
+  state (including any toolbar-only changes like paper size or orientation)
+  to `plugin.settings` before printing, ensuring all settings persist.
+- **Targeted margin persistence** — on CustomMarginModal Apply, only the
+  five margin fields (`marginPreset`, `marginTop/Bottom/Left/Right`) are
+  written to `plugin.settings` immediately. Other toolbar changes are saved
+  on Print. This avoids overwriting unsaved toolbar state.
+
 ## [Unreleased — beta] — 2026-04-05
 
 ### Added
