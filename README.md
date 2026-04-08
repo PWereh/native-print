@@ -10,9 +10,11 @@ No file permissions required on Android (API 33+). HTML is passed inline via a c
 
 - **Desktop** — triggers `window.print()` directly
 - **Android** — renders the note to HTML and launches the Print Helper APK via a custom scheme URL
-- Live print preview with inline toolbar (paper size, margins, font, title, metadata toggles)
+- Live print preview with inline toolbar (paper size, orientation, margins, font, title, metadata toggles)
+- **Print geometry overlay** — dashed crimson page boundary and margin guides overlaid on the preview; live on custom margin edits, snapshot on preset changes
+- Scaled paper shape — preview iframe matches the selected paper's aspect ratio (A3/A4/A5/Letter/Legal/Tabloid, portrait and landscape)
 - Page sizes: A3, A4, A5, Letter, Legal, Tabloid
-- Margin presets (Normal / Narrow / Wide) plus custom sliders
+- Margin presets (Normal / Narrow / Wide) plus custom sub-modal with live mm steppers
 - Optional document title heading and YAML frontmatter in output
 - Ribbon icon + command palette entry + context menu
 
@@ -32,12 +34,20 @@ gantt
     Expanded paper sizes (A3/A5/Tabloid)   :done,    pv3, 2026-03-20, 2026-03-28
     Margin presets (Normal/Narrow/Wide)    :done,    pv4, 2026-03-20, 2026-03-28
 
-    section v2.2 · Deep Settings
+    section v2.2 · Android Fidelity (beta)
+    Custom margin sub-modal + blur         :done,    am1, 2026-03-28, 2026-03-28
+    Orientation cast to PrintAttributes    :done,    am2, 2026-03-28, 2026-03-28
+    Full page-size map (A3/A5/Tabloid)     :done,    am3, 2026-03-28, 2026-03-28
+    Note filename → print job name / PDF   :done,    am4, 2026-03-28, 2026-03-28
+    Print geometry overlay (crimson guides):done,    am5, 2026-04-03, 2026-04-03
+    Paper aspect ratio in preview          :done,    am6, 2026-04-03, 2026-04-03
+
+    section v2.3 · Deep Settings
     Code-block text-wrap option            :active,  ds1, 2026-04-01, 2026-04-14
     Image parsing & inline embedding       :         ds2, 2026-04-07, 2026-04-21
     True-colour print output               :         ds3, 2026-04-14, 2026-04-28
 
-    section v2.3 · Layout Engine
+    section v2.4 · Layout Engine
     Custom header / footer templates       :         le1, 2026-05-01, 2026-05-21
     Inject custom CSS from vault root      :         le2, 2026-05-07, 2026-05-28
 
@@ -48,15 +58,20 @@ gantt
 
 ### Backlog detail
 
-| Area | Item | Priority |
-|---|---|---|
-| Preview | Code-block text-wrap toggle | High |
-| Preview | Image parsing (base64 inline) | High |
-| Preview | True-colour output (no forced #000) | Medium |
-| Layout | Custom header/footer per-template | Medium |
-| Layout | Custom CSS from `.css` at vault root | Medium |
-| Engine | Pandoc integration (format/typeset) | Low |
-| UX | Print from file-explorer context menu | Medium |
+| Area | Item | Priority | Status |
+|---|---|---|---|
+| Android | Custom margin sub-modal with blur | High | ✅ 2.2.0 |
+| Android | Orientation → `PrintAttributes` | High | ✅ 2.2.0 |
+| Android | Full page-size map (A3/A5/Tabloid) | High | ✅ 2.2.0 |
+| Android | Note filename as print job/PDF name | High | ✅ 2.2.0 |
+| Preview | Page-break algorithm (content in margins) | High | 🐛 #preview-pagebreak-001 |
+| Preview | Code-block text-wrap toggle | High | Next |
+| Preview | Image parsing (base64 inline) | High | Next |
+| Preview | True-colour output (no forced #000) | Medium | Planned |
+| Layout | Custom header/footer per-template | Medium | Planned |
+| Layout | Custom CSS from `.css` at vault root | Medium | Planned |
+| Engine | Pandoc integration (format/typeset) | Low | Planned |
+| UX | Print from file-explorer context menu | Medium | Planned |
 
 ---
 

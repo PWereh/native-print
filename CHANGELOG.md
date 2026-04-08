@@ -1,26 +1,275 @@
 # Changelog
 
 All notable changes to this project will be documented here.
-
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [2.0.0] — 2025-03
+## [2.2.0] — 2026-04-08
+
+### Known issues (deferred to next cycle)
+
+#### `#preview-pagebreak-001` — Page-break algorithm: content truncation, spurious heading gaps, tail-end misalignment
+
+Three failure modes remain unresolved after two passes (`2bcb3ef`, `77b3f13`):
+
+1. **Content truncated at margin borders** — `splitPre()` estimates line height as
+   `rect.height / lines.length`. Syntax-highlight spans, padding, and border decorators
+   cause variable-height lines; `curY` diverges from actual layout, splitting mid-line
+   instead of between lines.
+
+2. **Spurious gaps after subheadings** — Pass 1 inserts a spacer before any element
+   whose bottom edge crosses `cntEnd(page)`. Short `h2`/`h3` elements trigger this
+   even when the following paragraph would fit on the same page, producing large blank
+   zones after headings.
+
+3. **Tail-end rendering artefact** — Injected spacer divs inflate `scrollH` beyond
+   `nPages × PAGE_H`. The overlay and gap-bar calculation uses the pre-script page count,
+   causing the final page overlay to be misaligned with the actual iframe content height.
+
+**Root cause:** `getBoundingClientRect` values inside a sandboxed, CSS-scaled iframe are
+unreliable for sub-element line measurement. There is no way to determine rendered line
+height per node type without injecting calibration elements.
+
+**Proposed fix direction (next cycle):** Render at 1:1 scale in a hidden off-screen
+iframe, measure, inject spacers, then reload at display scale. Alternatively, use the
+browser's native print fragmentation in a `@media print` hidden iframe to derive break
+points, then mirror them into the preview.
+
+### Added (v2.2.0 feature set — delivered on beta)
+
+- Live print preview with per-page engineering overlay (margin bands, corner targets)
+- Custom margin sub-modal with sliders (5 mm) + steppers (1 mm), thumb-friendly layout
+- Paper aspect ratio preview (A3/A4/A5/Letter/Legal/Tabloid, portrait + landscape)
+- Orientation cast to Android `PrintAttributes.MediaSize.asPortrait/asLandscape()`
+- Note filename threaded as Android print job name and PDF filename
+- Page-number counter (glass/mica popup, fades 1.6 s after scroll)
+- Custom margin values persisted to `data.json` (survive plugin reload + app restart)
+- `savedCustomMargins` — custom values restored across preset switches within a session
+- `obelix-builder` skill §9 Termux workflow added
+
+## [Unreleased — beta] — 2026-04-05 (r2)
+
+### Fixed
+- **Content no longer spills into margins** — `.np-margin-band` now uses
+  `background-color: #ffffff` (solid white, matches paper) as the base.
+  Any iframe content overflowing past `body { padding }` is completely
+  hidden under the opaque white band. Engineering diagonal hatch rendered
+  on top with `repeating-linear-gradient(-45deg, …)` at 4.5 px pitch.
+- **Corner circle line weight reduced** — `.np-corner-target::after` border
+  changed from `1.5px` to `1px solid rgba(160,30,30,0.80)`. Lighter,
+  more precise feel matching the crosshair weight.
 
 ### Added
-- Android printing via `obsidian-print-helper://` custom URL scheme
-- HTML passed as inline base64 — no file permissions needed on API 33+
-- Print settings: page size, margins, font size, font family
-- Toggle for YAML frontmatter in printed output
-- Ribbon icon and command palette entry
+- **Sliders in custom margin sub-modal** — each margin row now contains a
+  full-width `<input type="range" min="0" max="50">` below the stepper
+  buttons. Slider and steppers are bidirectionally synced; moving either
+  updates both controls and the live preview.
+- **Custom margin memory across preset switches** — `savedCustomMargins`
+  field in `PrintPreviewModal` seeds from `plugin.settings` on open (if
+  `marginPreset === 'custom'`) and is updated on every Apply. Opening
+  "Custom…" always restores the last user-typed values, even after
+  temporarily switching to Normal/Narrow/Wide and back.
+- **Save on Print** — clicking 🖨 Print now writes the full `this.local`
+  state (including any toolbar-only changes like paper size or orientation)
+  to `plugin.settings` before printing, ensuring all settings persist.
+- **Targeted margin persistence** — on CustomMarginModal Apply, only the
+  five margin fields (`marginPreset`, `marginTop/Bottom/Left/Right`) are
+  written to `plugin.settings` immediately. Other toolbar changes are saved
+  on Print. This avoids overwriting unsaved toolbar state.
+
+## [Unreleased — beta] — 2026-04-05
+
+### Added
+- **Engineering corner targets** — four 22×22 px crosshair markers at the
+  corners of the print-area boundary. Two CSS background-image gradients
+  draw the 1.5 px H/V lines; `::after` draws a 7 px circle with white fill
+  at the intersection. Tone: `rgba(160,30,30,0.90)` — slightly darker and
+  heavier than the margin guide border.
+- **Diagonal hatching on margin bands** — four `.np-margin-band` divs cover
+  each margin side. Background: light grey `rgba(195,195,200,0.55)` +
+  `repeating-linear-gradient(-45deg, …)` at 5 px pitch, 1 px dark stroke.
+  Print area centre has no band, so the iframe content shows through cleanly.
+- **Disappearing page counter** — glass/mica `div.np-page-counter` absolutely
+  positioned on the preview area (z-index 100). Appears on scroll
+  (`np-pc-visible` → `opacity:1`), fades out 1.6 s after last scroll event.
+  Format: `currentPage / totalPages`. Mica finish: `backdrop-filter:blur(22px)
+  saturate(1.7)`, dark translucent bg, pill border-radius.
+
+### Fixed
+- **Content overflow into margins** — `html-builder.ts` `@media screen` block
+  now adds `overflow:hidden !important` to `body`, `pre/code { white-space:
+  pre-wrap; word-break:break-all; overflow-x:hidden }`, `table { table-layout:
+  fixed }`, `img { max-width:100% }`. No content escapes the print area in the
+  preview.
+
+## [Unreleased — beta] — 2026-04-04 (r3)
 
 ### Changed
-- Migrated from `MarkdownRenderer.renderMarkdown()` (deprecated) to `MarkdownRenderer.render()`
-- `isDesktopOnly` set to `false`
+- **Per-page overlays in scroll layer** — paper boundary and margin guides
+  are now `position:absolute` inside the wrapper, one per page, scrolling
+  with the content. Each `.np-page-overlay` is sized to the scaled page
+  footprint and sits at its exact page slot (`top = i × scaledPageH + i × PAGE_GAP_PX`).
+  The inner `.np-margin-guide` is positioned from mm values converted to
+  scaled screen px (`mm × PX_PER_MM × scale`).
+- **Single scroll layer** — removed the static `np-paper-outline` overlay.
+  All elements (iframe, page gap bars, page overlays) are in one
+  `.np-scroll-canvas → .np-scroll-pad → .np-frame-wrapper` hierarchy.
+- **z-index stack inside wrapper**:
+  `iframe (1) → .np-page-gap (5) → .np-page-overlay (10)`.
+  Page overlays use `outline` not `border` so they don't affect layout.
+  `overflow:hidden` on each overlay prevents content bleeding into gap areas.
+
+## [Unreleased — beta] — 2026-04-04 (r2)
+
+### Changed
+- **Static paper bounding box** — paper outline is now `position:absolute`
+  in the preview area (z-index 10) and never scrolls. Content, page breaks,
+  and gap bars scroll behind it through `.np-scroll-canvas` (z-index 1).
+- **Two-layer canvas architecture**:
+  - `.np-scroll-canvas` (`position:absolute; inset:0; overflow-y:auto`) — the
+    scrollable layer containing the iframe wrapper and gap divs.
+  - `.np-paper-outline` (`position:absolute; z-index:10`) — static overlay
+    showing the paper boundary. Centred via `left:50%; translateX(-50%)`.
+  - `.np-margin-guide` — inner div inside the outline, positioned by JS from
+    margin mm values × scale, showing the printable-area boundary.
+- **Page-gap divs** — on iframe load, `onFrameLoaded()` injects `.np-page-gap`
+  divs (grey, `PAGE_GAP_PX = 10`) at each page break position inside the
+  wrapper. Wrapper height = scaled content + `(nPages-1) × PAGE_GAP_PX`.
+- **Removed iframe pseudo-elements** — `html::before`, `html::after`,
+  `repeating-linear-gradient` all removed from `html-builder.ts`. They caused
+  incorrect `position:fixed` behaviour in multi-page tall iframes. All visual
+  guides are now DOM elements in the modal coordinate space.
+- **`html-builder.ts` simplified** — `@media screen` block now only sets
+  `body { width: paperWpx; padding: margins; margin: 0 }` for accurate layout.
+
+## [Unreleased — beta] — 2026-04-04
+
+### Changed
+- **Print preview now renders at exact paper scale** — iframe is sized to
+  physical paper dimensions (e.g. A4 = 793 × 1122 px at 96 dpi) and
+  CSS-scaled down to fit the preview area width. Content layout inside
+  the iframe matches the actual printed page exactly, not the iframe container.
+- **Page break visualisation** — `repeating-linear-gradient` on `html`
+  background draws a 3 px crimson rule (with 1 px feather) every page-height
+  interval. Page breaks are accurate: they fall at exactly every `pageHeightPx`
+  from the document origin, matching `@page` boundaries.
+- **Multi-page scroll** — preview area is now `overflow-y: auto`. After each
+  iframe load event, `onFrameLoaded()` reads `scrollHeight`, computes page
+  count, and extends the iframe + wrapper to cover all pages. Users can scroll
+  the full document.
+- **Wrapper/iframe architecture** — a `.np-frame-wrapper` div holds the scaled
+  footprint (so the scroll canvas is correct); the iframe is `position:absolute`
+  inside it at full paper size then `transform:scale()` shrinks it visually.
+- **`PAGE_DIMS_MM` and `PX_PER_MM` exported from `settings.ts`** — shared
+  between `html-builder.ts` and `print-preview-modal.ts`; previously duplicated.
+
+## [Unreleased — beta] — 2026-04-03
+
+### Fixed
+- **Content now constrained to print area** — `@media screen` adds
+  `body { padding: Tmm Rmm Bmm Lmm !important }` so preview content is
+  visually inside the margin boundary, matching actual print output.
+  (`@page` handles this at print time; the iframe does not render `@page`.)
+- **Content-area bounding box styled** — `html::after` changed from a thin
+  dashed guide to `1px solid rgba(220,20,60,0.80)` with a double 0.5 px
+  crimson glow ring and a `rgba(255,255,255,0.55)` white fill. The fill
+  separates the print zone from the 9% crimson margin tint behind it.
+- **Custom margins now persistent** — `PrintPreviewModal` receives
+  `plugin: NativePrintPlugin`. On `CustomMarginModal` Apply, margins are
+  written to both `this.local` (live preview) and `plugin.settings`
+  (persisted via `plugin.saveSettings()` → `data.json`). Values survive
+  modal close, plugin reload, and app restart.
+
+ — dashed crimson guides injected into the preview
+  iframe via `@media screen` CSS (never printed):
+  - `html::before` — 1.5 px dashed crimson page boundary + four `box-shadow:
+    inset` margin-fill bands (one per side, 9 % crimson tint).
+  - `html::after` — 0.75 px dashed crimson content-area boundary, inset by
+    the current margin values.
+  - Updates **live** (250 ms debounce) on every custom-margin stepper click.
+  - Updates as a **snapshot** (single rerender) on preset and paper-size changes.
+- **Paper aspect ratio** — preview iframe `aspect-ratio` set dynamically to
+  the selected paper size + orientation (A3/A4/A5/Letter/Legal/Tabloid).
+  Iframe is centred over a neutral grey canvas; shrinks to fit available height.
+- **Design spec** — `docs/print-geometry-overlay.md` documents overlay
+  architecture, layer breakdown, color spec, z-index stack, and live/snapshot
+  behaviour table.
+  a focused margin editor (Top / Bottom / Left / Right steppers). The preview
+  modal blurs and becomes non-interactive while the sub-modal is active; clicking
+  Apply returns to the live preview with updated values.
+- **Orientation control** — Portrait / Landscape in preview toolbar and settings tab.
+  Value is serialised into the APK intent URL and applied to Android `PrintAttributes`
+  via `MediaSize.asPortrait()` / `asLandscape()`.
+- **Full page size support on Android** — A3, A4, A5, Letter, Legal, Tabloid all
+  map to the correct `PrintAttributes.MediaSize` constant in the APK.
+- **Note filename threaded to Android print manager** — the note basename is now
+  passed as `docTitle` in the settings JSON. The APK uses it as the `PrintManager`
+  job name, so the print queue entry and any saved PDF are named after the note.
+
+### Changed
+- `toIntentUrl` now includes `orientation` and `docTitle` in the serialised JSON payload.
+- `getPrintExecutor` and `sendToAndroidHelper` accept `title: string` parameter
+  so the note name is available at URL-construction time.
+- APK `PrintViewModel.Success` now carries `docTitle`.
+- APK `MainActivity.doPrint` uses `docTitle` as job name; `buildMediaSize()` handles
+  all six paper sizes and maps orientation correctly.
+
+---
+
+## [2.1.1] — 2026-03-28
+
+### Added
+- OneUI-inspired translucent glass modal bezel (`rgba(13,13,18,0.93)`, `blur(32px)`,
+  `border-radius: 22px`, layered `box-shadow`).
+- Toolbar repositioned to the lower quarter below the preview iframe.
+- Orientation (Portrait / Landscape) added to toolbar and settings.
+- Circle-checkbox toggles for Title and Metadata.
+- `🖨` printer icon on both platforms (replaced `⬡` Android symbol).
+
+---
+
+## [2.1.0] — 2026-03-28
+
+### Added
+- Live-updating print preview modal with 250 ms debounce.
+- Expanded paper sizes: A3, A4, A5, Letter, Legal, Tabloid.
+- Margin presets: Normal / Narrow / Wide.
+- `includeTitle` setting — prints note filename as H1 heading.
+- Termux build workflow (`deploy.sh`, `node node_modules/…` scripts).
+- `npm run deploy` command for one-step Termux → vault deployment.
+
+---
+
+## [2.0.1] — 2026-03-20
+
+### Fixed
+- APK: scheme mismatch (`native-print-helper` → `obsidian-print-helper`).
+- APK: `finish()` removed from `doPrint()` — was destroying Activity while
+  `PrintDocumentAdapter` was still rendering asynchronously.
+- APK: `StateFlow` re-delivery on `repeatOnLifecycle` restart fixed via
+  `resetState()` called before `triggerPrint()`.
+- APK: `WebView` now attached via `setContentView()` before loading HTML.
+- Plugin: `btoa()` output converted to URL-safe base64 before encoding.
+- Plugin: `anchor.click()` replaces `window.open()` for Android dispatch.
+
+---
+
+## [2.0.0] — 2026-03
+
+### Added
+- Android printing via `obsidian-print-helper://` custom URL scheme.
+- HTML passed as inline base64 — no file permissions needed on API 33+.
+- Print preview modal with iframe.
+- Settings: page size, margins, font size, font family, frontmatter toggle.
+- Ribbon icon + command palette entry.
+
+### Changed
+- Migrated from deprecated `MarkdownRenderer.renderMarkdown()` to `MarkdownRenderer.render()`.
+- `isDesktopOnly` set to `false`.
 
 ---
 
 ## [1.0.0] — Initial release
 
-- Desktop-only print via `window.print()`
+- Desktop-only print via `window.print()`.

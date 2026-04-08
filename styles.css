@@ -78,23 +78,195 @@
 	min-height:     0 !important;
 }
 
-/* ── Preview area ───────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   PREVIEW AREA — single scroll layer
+   ═══════════════════════════════════════════════════════════════ */
+
 .native-print-preview-area {
 	flex:       1 1 auto;
 	min-height: 0;
-	background: #c8c8c8;
-	display:    flex;
-	padding:    10px;
+	position:   relative;   /* anchor for .np-page-counter */
+	background: #7a7a7a;
 	overflow:   hidden;
 }
+
+/* ── Scroll canvas ───────────────────────────────────────────────── */
+.np-scroll-canvas {
+	width:      100%;
+	height:     100%;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+/* Centering pad — flex column, centres wrapper horizontally. */
+.np-scroll-pad {
+	display:         flex;
+	flex-direction:  column;
+	align-items:     center;
+	padding:         20px 16px 40px;
+	min-height:      100%;
+}
+
+/* ── Wrapper ─────────────────────────────────────────────────────── */
+.np-frame-wrapper {
+	position:    relative;
+	flex-shrink: 0;
+	/* Drop shadow on the paper stack */
+	filter: drop-shadow(0 3px 14px rgba(0,0,0,0.55))
+	        drop-shadow(0 1px 3px rgba(0,0,0,0.28));
+}
+
+/* ── Iframe ──────────────────────────────────────────────────────── */
+/* z-index 1 — content layer. */
 .native-print-preview-frame {
-	flex:         1 1 auto;
-	border:       none;
-	border-radius:8px;
-	background:   #ffffff;
-	box-shadow:   0 4px 24px rgba(0, 0, 0, 0.38);
-	display:      block;
-	min-height:   0;
+	position:         absolute;
+	top:              0;
+	left:             0;
+	border:           none;
+	background:       #ffffff;
+	display:          block;
+	transform-origin: top left;
+	z-index:          1;
+}
+
+/* ── Page gap bar ───────────────────────────────────────────────── */
+/* z-index 5 — above iframe, below overlays. */
+.np-page-gap {
+	position:       absolute;
+	left:           0;
+	background:     #7a7a7a;
+	z-index:        5;
+	pointer-events: none;
+}
+
+/* ── Per-page overlay ────────────────────────────────────────────── */
+/* Transparent container — clips content to page, holds margin bands
+   and margin guide. z-index 10. */
+.np-page-overlay {
+	position:       absolute;
+	left:           0;
+	pointer-events: none;
+	z-index:        10;
+	overflow:       hidden;   /* hard clip — no content into margins */
+}
+
+/* ── Margin bands (engineering hatching) ─────────────────────────── */
+/* White base matches paper — completely occludes overflowing content.
+   Diagonal dark hatch on top gives the engineering greyscale look.  */
+.np-margin-band {
+	position: absolute;
+	/* Solid white base — hides any iframe content that overflows body */
+	background-color: #ffffff;
+	/* Diagonal hatch: 45° dark lines at 5 px pitch, 1 px stroke     */
+	background-image: repeating-linear-gradient(
+		-45deg,
+		transparent            0px,
+		transparent            3.5px,
+		rgba(100, 100, 110, 0.28) 3.5px,
+		rgba(100, 100, 110, 0.28) 4.5px
+	);
+}
+
+/* ── Margin guide — print-area boundary ─────────────────────────── */
+/* Position set by JS. No background (transparent to print area).
+   Solid border marks the safe-zone edge.                             */
+.np-margin-guide {
+	position:       absolute;
+	border:         1px solid rgba(180, 40, 40, 0.72);
+	box-shadow:
+		0 0 0 0.5px rgba(180, 40, 40, 0.18),
+		inset 0 0 0 0.5px rgba(180, 40, 40, 0.18);
+}
+
+/* ── Corner targets — engineering crosshair + circle ────────────── */
+/* Each corner-target div is CT_SIZE × CT_SIZE (22 px), centred on
+   the margin-guide corner via negative offset.
+   Crosshair drawn with two background-image linear-gradients.
+   Circle drawn with ::after pseudo-element.                          */
+.np-corner-target {
+	position: absolute;
+	width:    22px;
+	height:   22px;
+	pointer-events: none;
+
+	/* ── Crosshair lines ── */
+	/* Horizontal 1.5 px bar through vertical centre */
+	background-image:
+		linear-gradient(to right,
+			rgba(160, 30, 30, 0.90) 0%, rgba(160, 30, 30, 0.90) 100%),
+		/* Vertical 1.5 px bar through horizontal centre */
+		linear-gradient(to bottom,
+			rgba(160, 30, 30, 0.90) 0%, rgba(160, 30, 30, 0.90) 100%);
+	background-size:
+		100% 1.5px,
+		1.5px 100%;
+	background-repeat: no-repeat;
+	background-position:
+		center center,
+		center center;
+}
+
+/* Circle at crosshair intersection */
+.np-corner-target::after {
+	content:   '';
+	position:  absolute;
+	top:       50%;
+	left:      50%;
+	transform: translate(-50%, -50%);
+	width:     7px;
+	height:    7px;
+	border-radius: 50%;
+	border:    1px solid rgba(160, 30, 30, 0.80);
+	background: rgba(255, 255, 255, 0.70);
+}
+
+/* Clip crosshair lines to within the corner target box.
+   Inner 7 px gap around the circle centre is masked by ::after. */
+
+/* Corner positions: each div offset −CT_HALF from the guide corner. */
+.np-ct-tl { top:  -11px; left:  -11px; }
+.np-ct-tr { top:  -11px; right: -11px; }
+.np-ct-bl { bottom: -11px; left:  -11px; }
+.np-ct-br { bottom: -11px; right: -11px; }
+
+/* ── Page number counter ─────────────────────────────────────────── */
+/* Floating glass popup, absolute on .native-print-preview-area.
+   Hidden by default; .np-pc-visible fades it in; JS removes the
+   class after 1.6 s to trigger the fade-out transition.             */
+.np-page-counter {
+	position:       absolute;
+	top:            12px;
+	left:           50%;
+	transform:      translateX(-50%);
+	z-index:        100;
+	pointer-events: none;
+	white-space:    nowrap;
+
+	/* Mica / glass finish */
+	background:         rgba(18, 18, 26, 0.70);
+	backdrop-filter:    blur(22px) saturate(1.7);
+	-webkit-backdrop-filter: blur(22px) saturate(1.7);
+	border:             1px solid rgba(255, 255, 255, 0.13);
+	border-radius:      24px;
+	padding:            5px 18px;
+	box-shadow:
+		0 4px 20px rgba(0, 0, 0, 0.40),
+		0 1px 0    rgba(255, 255, 255, 0.06) inset;
+
+	/* Typography */
+	color:              rgba(255, 255, 255, 0.88);
+	font-size:          12.5px;
+	font-weight:        500;
+	font-variant-numeric: tabular-nums;
+	letter-spacing:     0.03em;
+
+	/* Fade transition */
+	opacity:            0;
+	transition:         opacity 0.18s ease;
+}
+
+.np-page-counter.np-pc-visible {
+	opacity: 1;
 }
 
 /* ── Compact toolbar (bottom quarter) ───────────────────────────── */
@@ -266,4 +438,132 @@
 		gap: 8px;
 	}
 	.native-print-btn-row button { width: 100%; }
+}
+
+/* ── Custom Margin sub-modal blur ───────────────────────────────── */
+.native-print-preview-modal.native-print-blurred {
+	filter:         blur(4px);
+	pointer-events: none;
+	transition:     filter 0.15s;
+}
+
+/* Custom margin modal chrome */
+.np-custom-margin-modal { min-width: 260px; }
+.np-margin-val {
+	display:    inline-block;
+	min-width:  44px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	font-size:  13px;
+	font-weight:500;
+}
+.np-custom-btn-row {
+	display:         flex;
+	justify-content: flex-end;
+	gap:             10px;
+	margin-top:      18px;
+}
+.np-custom-btn-row button {
+	min-height:    42px;
+	min-width:     90px;
+	border-radius: 21px;
+	padding:       0 20px;
+	cursor:        pointer;
+	border:        none;
+	font-size:     13.5px;
+	font-weight:   500;
+}
+
+/* ── Custom margin sub-modal ─────────────────────────────────────── */
+/* One horizontal row per side: [Label] ──[slider 5mm]── [− val mm +] */
+.np-cm-row {
+	display:     flex;
+	align-items: center;
+	gap:         12px;
+	padding:     10px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.np-cm-row:last-of-type { border-bottom: none; }
+
+.np-cm-label {
+	min-width:   52px;
+	font-size:   13.5px;
+	font-weight: 600;
+	color:       var(--text-normal);
+	flex-shrink: 0;
+}
+
+/* Centre: coarse 5mm slider */
+.np-cm-slider {
+	flex:              1;
+	-webkit-appearance: none;
+	appearance:         none;
+	height:            4px;
+	border-radius:     2px;
+	background:        var(--background-modifier-border);
+	outline:           none;
+	cursor:            pointer;
+	min-width:         0;
+}
+.np-cm-slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	width:         26px;
+	height:        26px;
+	border-radius: 50%;
+	background:    var(--interactive-accent);
+	cursor:        pointer;
+	box-shadow:    0 1px 5px rgba(0,0,0,0.35);
+	border:        2px solid rgba(255,255,255,0.30);
+}
+.np-cm-slider::-moz-range-thumb {
+	width:         26px;
+	height:        26px;
+	border-radius: 50%;
+	border:        2px solid rgba(255,255,255,0.30);
+	background:    var(--interactive-accent);
+	cursor:        pointer;
+}
+
+/* Right: fine stepper group 1mm */
+.np-cm-ctrl {
+	display:     flex;
+	align-items: center;
+	gap:         5px;
+	flex-shrink: 0;
+}
+
+/* Pill circle buttons — thumb-friendly 40px */
+.np-cm-btn {
+	width:         40px;
+	height:        40px;
+	border-radius: 50%;
+	border:        1px solid var(--background-modifier-border);
+	background:    var(--background-secondary);
+	color:         var(--text-normal);
+	font-size:     20px;
+	font-weight:   300;
+	line-height:   1;
+	display:       flex;
+	align-items:   center;
+	justify-content: center;
+	cursor:        pointer;
+	flex-shrink:   0;
+	transition:    background 0.12s;
+	-webkit-tap-highlight-color: transparent;
+}
+.np-cm-btn:hover  { background: var(--background-modifier-hover); }
+.np-cm-btn:active { opacity: 0.65; }
+
+/* Value + unit display */
+.np-cm-val {
+	min-width:    26px;
+	text-align:   right;
+	font-size:    13px;
+	font-weight:  500;
+	font-variant-numeric: tabular-nums;
+}
+.np-cm-unit {
+	font-size:   12px;
+	color:       var(--text-muted);
+	margin-left: 1px;
 }

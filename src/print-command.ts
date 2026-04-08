@@ -60,12 +60,12 @@ async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Pr
 		notice.hide();
 	}
 
-	const title = view.file.basename;
+	const title    = view.file.basename;
 	const settings = plugin.settings;
 
 	if (skipPreview || !settings.showPreview) {
 		const fullHtml = buildHelperUrl.wrapDocument(fragment, title, settings);
-		getPrintExecutor(plugin)(fullHtml);
+		getPrintExecutor(plugin, title)(fullHtml);
 		return;
 	}
 
@@ -74,20 +74,21 @@ async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Pr
 		fragment,
 		title,
 		settings,
-		getPrintExecutor(plugin)
+		getPrintExecutor(plugin, title),
+		plugin
 	).open();
 }
 
 // ── Platform executors ────────────────────────────────────────────────────────
 
-function getPrintExecutor(plugin: NativePrintPlugin) {
+function getPrintExecutor(plugin: NativePrintPlugin, title: string) {
 	if (Platform.isAndroidApp) {
-		return (fullHtml: string) => sendToAndroidHelper(fullHtml, plugin);
+		return (fullHtml: string) => sendToAndroidHelper(fullHtml, plugin, title);
 	}
 	return (_fullHtml: string) => { window.print(); };
 }
 
-function sendToAndroidHelper(fullHtml: string, plugin: NativePrintPlugin): void {
+function sendToAndroidHelper(fullHtml: string, plugin: NativePrintPlugin, title: string): void {
 	// btoa() produces standard base64 (+, /, = padding).
 	// The APK decodes with Base64.URL_SAFE | Base64.NO_PADDING, which expects
 	// the URL-safe alphabet (- instead of +, _ instead of /, no = padding).
@@ -102,6 +103,6 @@ function sendToAndroidHelper(fullHtml: string, plugin: NativePrintPlugin): void 
 	// Use anchor click, not window.open() — window.open() triggers the Capacitor
 	// full-screen browser on Android, hanging the UI.
 	const a = document.createElement('a');
-	a.href = buildHelperUrl.toIntentUrl(base64, plugin.settings);
+	a.href = buildHelperUrl.toIntentUrl(base64, plugin.settings, title);
 	a.click();
 }
