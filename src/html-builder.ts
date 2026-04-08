@@ -5,20 +5,25 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Generates the page-break JavaScript injected into every srcdoc render.
+ * Page-break algorithm injected into every srcdoc.
  *
- * Algorithm — single top-to-bottom pass over direct body children:
- *   For each element, if it overflows into the bottom margin zone of its
- *   current page (i.e. elBot > (page+1)*PAGE_H - M_BOT), a spacer div is
- *   inserted before it with enough height to push the element to the top of
- *   the next page's content area. Elements taller than one content area are
- *   skipped (can't be broken without splitting the element).
+ * Two-pass approach:
+ *   Pass 1 — short elements  (height ≤ CONTENT_H):
+ *     If the element overflows the bottom margin zone of its current page,
+ *     insert a spacer div before it to push it to the top of the next page's
+ *     content area.
  *
- * When complete, the script posts { type:'np-layout-ready', scrollH } to the
- * parent window so the modal can read the final document height without a race
- * condition against the iframe's own load event.
+ *   Pass 2 — tall elements, specifically <pre> blocks (height > CONTENT_H):
+ *     Walk every pre/code block. For each page boundary that falls inside it,
+ *     split the block's text at the nearest line break before that boundary
+ *     and insert a spacer between the two halves. This removes the "content
+ *     hidden under white margin band" problem for long code blocks.
  *
- * Requires sandbox="allow-scripts allow-same-origin".
+ * Line-height estimate: rect.height / line_count  — adequate for monospace pre
+ * blocks. Syntax-highlight spans are not preserved in split segments; the
+ * actual printed output (sent to Android PrintManager) is the original document.
+ *
+ * Completes by posting { type:'np-layout-ready', scrollH } to the parent.
  */
 function pageBreakScript(pageHpx: number, mTopPx: number, mBotPx: number): string {
 	const contentH = pageHpx - mTopPx - mBotPx;
@@ -29,26 +34,22 @@ function pageBreakScript(pageHpx: number, mTopPx: number, mBotPx: number): strin
   var M_BOT     = ${mBotPx};
   var CONTENT_H = ${contentH};
 
-  function run() {
+  function cntEnd(page)   { return (page + 1) * PAGE_H - M_BOT; }
+  function cntStart(page) { return page * PAGE_H + M_TOP; }
+
+  // ── Pass 1: push short elements past the bottom margin ──────────────────
+  function passOne() {
     var children = Array.from(document.body.children);
     for (var i = 0; i < children.length; i++) {
       var el = children[i];
-      if (el.dataset.npSpacer) continue;
-
+      if (el.dataset.npSpacer || el.dataset.npSplit) continue;
       var rect  = el.getBoundingClientRect();
       var elTop = rect.top + window.scrollY;
       var elBot = elTop + rect.height;
-
-      // Skip elements taller than one content area — can't single-break them.
-      if (rect.height > CONTENT_H) continue;
-
-      var page   = Math.floor(elTop / PAGE_H);
-      var cntEnd = (page + 1) * PAGE_H - M_BOT;   // content zone end this page
-
-      if (elBot > cntEnd) {
-        // Insert spacer: push element to top of next page's content area.
-        var pushTo = (page + 1) * PAGE_H + M_TOP;
-        var gap    = Math.ceil(pushTo - elTop);
+      if (rect.height > CONTENT_H) continue;   // handled by pass 2
+      var page = Math.floor(elTop / PAGE_H);
+      if (elBot > cntEnd(page)) {
+        var gap = Math.ceil(cntStart(page + 1) - elTop);
         if (gap > 0) {
           var sp = document.createElement('div');
           sp.dataset.npSpacer = '1';
@@ -57,16 +58,98 @@ function pageBreakScript(pageHpx: number, mTopPx: number, mBotPx: number): strin
         }
       }
     }
+  }
 
+  // ── Pass 2: split pre blocks that span multiple pages ───────────────────
+  function passTwo() {
+    // querySelectorAll returns a static NodeList — safe to iterate while DOM mutates.
+    var pres = Array.from(document.body.querySelectorAll('pre'));
+    for (var j = 0; j < pres.length; j++) {
+      splitPre(pres[j]);
+    }
+  }
+
+  function splitPre(pre) {
+    if (pre.dataset.npSplit || pre.dataset.npSpacer) return;
+    var rect      = pre.getBoundingClientRect();
+    var preTop    = rect.top + window.scrollY;
+    var startPage = Math.floor(preTop / PAGE_H);
+    var endPage   = Math.floor((preTop + rect.height) / PAGE_H);
+    if (startPage >= endPage) return;              // fits on one page — skip
+
+    // Split on newlines so we never cut mid-character.
+    var raw   = pre.textContent || '';
+    var lines = raw.split('\\n');
+    if (lines.length < 2) return;
+
+    var lineH = rect.height / lines.length;        // estimated monospace line height
+
+    // Build segment arrays and the spacer height needed between them.
+    var segments = [[]];
+    var spacers  = [];
+    var curY     = preTop;
+
+    for (var l = 0; l < lines.length; l++) {
+      var page = Math.floor(curY / PAGE_H);
+      // Would adding this line push the bottom past the content zone end?
+      if (curY + lineH > cntEnd(page) && segments[segments.length - 1].length > 0) {
+        var nextTop = cntStart(page + 1);
+        spacers.push(Math.ceil(nextTop - curY));
+        segments.push([]);
+        curY = nextTop;
+      }
+      segments[segments.length - 1].push(lines[l]);
+      curY += lineH;
+    }
+
+    if (segments.length < 2) return;
+
+    // Build replacement fragment: pre, spacer, pre, spacer, …
+    var frag = document.createDocumentFragment();
+    for (var s = 0; s < segments.length; s++) {
+      var clone = document.createElement('pre');
+      // Preserve classes (e.g. language-xxx) but not inline height/width.
+      clone.className     = pre.className;
+      clone.dataset.npSplit = '1';
+      // Wrap in a code element if the original had one.
+      var origCode = pre.querySelector('code');
+      if (origCode) {
+        var c = document.createElement('code');
+        c.className   = origCode.className;
+        c.textContent = segments[s].join('\\n');
+        clone.appendChild(c);
+      } else {
+        clone.textContent = segments[s].join('\\n');
+      }
+      frag.appendChild(clone);
+
+      if (s < spacers.length && spacers[s] > 0) {
+        var sp = document.createElement('div');
+        sp.dataset.npSpacer = '1';
+        sp.style.cssText = 'display:block;height:' + spacers[s] + 'px;';
+        frag.appendChild(sp);
+      }
+    }
+
+    pre.parentNode.replaceChild(frag, pre);
+  }
+
+  function done() {
     try {
       window.parent.postMessage({
-        type: 'np-layout-ready',
+        type:    'np-layout-ready',
         scrollH: document.documentElement.scrollHeight
       }, '*');
     } catch (e) {}
   }
 
-  // Two rAFs after DOMContentLoaded ensures getBoundingClientRect is valid.
+  function run() {
+    passOne();
+    passTwo();
+    // Second rAF after mutations to let the browser reflow before measuring.
+    requestAnimationFrame(function () { requestAnimationFrame(done); });
+  }
+
   function schedule() {
     requestAnimationFrame(function () { requestAnimationFrame(run); });
   }
