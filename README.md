@@ -60,12 +60,13 @@ gantt
 
 | Area | Item | Priority | Status |
 |---|---|---|---|
-| Android | Custom margin sub-modal with blur | High | ✅ beta |
-| Android | Orientation → `PrintAttributes` | High | ✅ beta |
-| Android | Full page-size map (A3/A5/Tabloid) | High | ✅ beta |
-| Android | Note filename as print job/PDF name | High | ✅ beta |
-| Preview | Code-block text-wrap toggle | High | Planned |
-| Preview | Image parsing (base64 inline) | High | Planned |
+| Android | Custom margin sub-modal with blur | High | ✅ 2.2.0 |
+| Android | Orientation → `PrintAttributes` | High | ✅ 2.2.0 |
+| Android | Full page-size map (A3/A5/Tabloid) | High | ✅ 2.2.0 |
+| Android | Note filename as print job/PDF name | High | ✅ 2.2.0 |
+| Preview | Page-break algorithm (content in margins) | High | 🐛 #preview-pagebreak-001 |
+| Preview | Code-block text-wrap toggle | High | Next |
+| Preview | Image parsing (base64 inline) | High | Next |
 | Preview | True-colour output (no forced #000) | Medium | Planned |
 | Layout | Custom header/footer per-template | Medium | Planned |
 | Layout | Custom CSS from `.css` at vault root | Medium | Planned |

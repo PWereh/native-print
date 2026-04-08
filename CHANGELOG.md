@@ -5,6 +5,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.2.0] — 2026-04-08
+
+### Known issues (deferred to next cycle)
+
+#### `#preview-pagebreak-001` — Page-break algorithm: content truncation, spurious heading gaps, tail-end misalignment
+
+Three failure modes remain unresolved after two passes (`2bcb3ef`, `77b3f13`):
+
+1. **Content truncated at margin borders** — `splitPre()` estimates line height as
+   `rect.height / lines.length`. Syntax-highlight spans, padding, and border decorators
+   cause variable-height lines; `curY` diverges from actual layout, splitting mid-line
+   instead of between lines.
+
+2. **Spurious gaps after subheadings** — Pass 1 inserts a spacer before any element
+   whose bottom edge crosses `cntEnd(page)`. Short `h2`/`h3` elements trigger this
+   even when the following paragraph would fit on the same page, producing large blank
+   zones after headings.
+
+3. **Tail-end rendering artefact** — Injected spacer divs inflate `scrollH` beyond
+   `nPages × PAGE_H`. The overlay and gap-bar calculation uses the pre-script page count,
+   causing the final page overlay to be misaligned with the actual iframe content height.
+
+**Root cause:** `getBoundingClientRect` values inside a sandboxed, CSS-scaled iframe are
+unreliable for sub-element line measurement. There is no way to determine rendered line
+height per node type without injecting calibration elements.
+
+**Proposed fix direction (next cycle):** Render at 1:1 scale in a hidden off-screen
+iframe, measure, inject spacers, then reload at display scale. Alternatively, use the
+browser's native print fragmentation in a `@media print` hidden iframe to derive break
+points, then mirror them into the preview.
+
+### Added (v2.2.0 feature set — delivered on beta)
+
+- Live print preview with per-page engineering overlay (margin bands, corner targets)
+- Custom margin sub-modal with sliders (5 mm) + steppers (1 mm), thumb-friendly layout
+- Paper aspect ratio preview (A3/A4/A5/Letter/Legal/Tabloid, portrait + landscape)
+- Orientation cast to Android `PrintAttributes.MediaSize.asPortrait/asLandscape()`
+- Note filename threaded as Android print job name and PDF filename
+- Page-number counter (glass/mica popup, fades 1.6 s after scroll)
+- Custom margin values persisted to `data.json` (survive plugin reload + app restart)
+- `savedCustomMargins` — custom values restored across preset switches within a session
+- `obelix-builder` skill §9 Termux workflow added
+
 ## [Unreleased — beta] — 2026-04-05 (r2)
 
 ### Fixed
