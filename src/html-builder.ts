@@ -48,6 +48,20 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
 	const titleHeading = s.includeTitle
 		? `<h1 class="np-doc-title">${escapeHtml(title)}</h1>\n`
 		: '';
+
+	// True-colour: when OFF force black text/links for printer economy.
+	// When ON preserve the note's original colours.
+	const colourRules = s.trueColour
+		? ''
+		: `body { color: #000; background: #fff; }
+    a  { color: #000; }`;
+
+	// Code-wrap: when ON, long lines wrap (better for print).
+	// When OFF, honour natural line breaks (default behaviour).
+	const codeWrapRule = s.codeWrap
+		? `pre, code { white-space: pre-wrap !important; word-break: break-all !important; }`
+		: `pre { overflow-x: auto; }`;
+
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -63,10 +77,9 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
       font-family: ${s.fontFamily};
       font-size: ${s.fontSize}pt;
       line-height: 1.6;
-      color: #000;
-      background: #fff;
       margin: 0;
     }
+    ${colourRules}
     .np-doc-title { margin: 0 0 0.75em; font-size: 1.6em; border-bottom: 1px solid #ccc; padding-bottom: 0.25em; }
     h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
     pre, blockquote, table  { page-break-inside: avoid; }
@@ -74,11 +87,12 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
     th { background: #f0f0f0; font-weight: bold; }
-    a  { color: #000; text-decoration: underline; }
+    a  { text-decoration: underline; }
     code { font-family: monospace; background: #f5f5f5; padding: 1px 4px; border-radius: 3px; }
-    pre  { background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; }
+    pre  { background: #f5f5f5; padding: 12px; border-radius: 4px; }
     pre code { background: none; padding: 0; }
-    blockquote { border-left: 3px solid #999; margin: 0; padding-left: 16px; color: #444; }
+    ${codeWrapRule}
+    blockquote { border-left: 3px solid #999; margin: 0; padding-left: 16px; }
     hr { border: none; border-top: 1px solid #ccc; margin: 1em 0; }
     ${s.includeYamlFrontmatter ? '' : '.frontmatter, .frontmatter-container { display: none !important; }'}
     ${previewOverlayCss(s)}

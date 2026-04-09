@@ -180,6 +180,8 @@ export class PrintPreviewModal extends Modal {
 		});
 		this.addCircleToggle(toolbar, 'Title',    this.local.includeTitle,           v => { this.local.includeTitle = v;            this.scheduleRerender(); });
 		this.addCircleToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, v => { this.local.includeYamlFrontmatter = v; this.scheduleRerender(); });
+		this.addCircleToggle(toolbar, 'Wrap',     this.local.codeWrap,               v => { this.local.codeWrap = v;                this.scheduleRerender(); });
+		this.addCircleToggle(toolbar, 'Colour',   this.local.trueColour,             v => { this.local.trueColour = v;              this.scheduleRerender(); });
 
 		// ── 3. Button row ──────────────────────────────────────────────────
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });

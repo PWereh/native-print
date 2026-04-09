@@ -55,7 +55,10 @@ async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Pr
 	let fragment: string;
 	try {
 		const markdown = await plugin.app.vault.read(view.file);
-		fragment = await renderNoteToHtml(plugin.app, markdown, view.file.path, plugin);
+		fragment = await renderNoteToHtml(
+			plugin.app, markdown, view.file.path, plugin,
+			plugin.settings.inlineImages
+		);
 	} finally {
 		notice.hide();
 	}

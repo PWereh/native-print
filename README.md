@@ -43,9 +43,9 @@ gantt
     Paper aspect ratio in preview          :done,    am6, 2026-04-03, 2026-04-03
 
     section v2.3 · Deep Settings
-    Code-block text-wrap option            :active,  ds1, 2026-04-01, 2026-04-14
-    Image parsing & inline embedding       :         ds2, 2026-04-07, 2026-04-21
-    True-colour print output               :         ds3, 2026-04-14, 2026-04-28
+    Code-block text-wrap toggle            :done,    ds1, 2026-04-01, 2026-04-08
+    Image inline embedding (base64)        :done,    ds2, 2026-04-01, 2026-04-08
+    True-colour print output               :done,    ds3, 2026-04-01, 2026-04-08
 
     section v2.4 · Layout Engine
     Custom header / footer templates       :         le1, 2026-05-01, 2026-05-21
@@ -65,9 +65,10 @@ gantt
 | Android | Full page-size map (A3/A5/Tabloid) | High | ✅ 2.2.0 |
 | Android | Note filename as print job/PDF name | High | ✅ 2.2.0 |
 | Preview | Page-break algorithm (content in margins) | High | 🐛 #preview-pagebreak-001 |
-| Preview | Code-block text-wrap toggle | High | Next |
-| Preview | Image parsing (base64 inline) | High | Next |
-| Preview | True-colour output (no forced #000) | Medium | Planned |
+| Preview | Code-block text-wrap toggle | High | ✅ 2.3.0 |
+| Preview | Image inline embedding (base64) | High | ✅ 2.3.0 |
+| Preview | True-colour print output | Medium | ✅ 2.3.0 |
+
 | Layout | Custom header/footer per-template | Medium | Planned |
 | Layout | Custom CSS from `.css` at vault root | Medium | Planned |
 | Engine | Pandoc integration (format/typeset) | Low | Planned |

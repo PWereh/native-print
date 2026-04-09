@@ -31,6 +31,12 @@ export interface PrintPluginSettings {
 	includeTitle: boolean;
 	includeYamlFrontmatter: boolean;
 	showPreview: boolean;
+	/** Wrap long code-block lines in the output (pre-wrap vs pre). */
+	codeWrap: boolean;
+	/** Inline vault images as base64 data URIs so they survive Android transfer. */
+	inlineImages: boolean;
+	/** Preserve original text/link colours instead of forcing black-on-white. */
+	trueColour: boolean;
 }
 
 export const MARGIN_PRESETS: Record<MarginPreset, { top: number; bottom: number; left: number; right: number }> = {
@@ -62,6 +68,9 @@ export const DEFAULT_SETTINGS: PrintPluginSettings = {
 	includeTitle: true,
 	includeYamlFrontmatter: false,
 	showPreview: true,
+	codeWrap: false,
+	inlineImages: true,
+	trueColour: false,
 };
 
 export class PrintSettingTab extends PluginSettingTab {
@@ -177,6 +186,32 @@ export class PrintSettingTab extends PluginSettingTab {
 			.addToggle(t =>
 				t.setValue(this.plugin.settings.includeYamlFrontmatter)
 					.onChange(async v => { this.plugin.settings.includeYamlFrontmatter = v; await this.plugin.saveSettings(); })
+			);
+
+		containerEl.createEl('h3', { text: 'Output quality' });
+
+		new Setting(containerEl)
+			.setName('Wrap code blocks')
+			.setDesc('Wrap long lines in code blocks instead of truncating. Useful for printing code-heavy notes.')
+			.addToggle(t =>
+				t.setValue(this.plugin.settings.codeWrap)
+					.onChange(async v => { this.plugin.settings.codeWrap = v; await this.plugin.saveSettings(); })
+			);
+
+		new Setting(containerEl)
+			.setName('Inline images')
+			.setDesc('Embed vault images as base64 data URIs. Required for images to print on Android.')
+			.addToggle(t =>
+				t.setValue(this.plugin.settings.inlineImages)
+					.onChange(async v => { this.plugin.settings.inlineImages = v; await this.plugin.saveSettings(); })
+			);
+
+		new Setting(containerEl)
+			.setName('True-colour output')
+			.setDesc('Preserve original text and link colours instead of forcing black-on-white for printer economy.')
+			.addToggle(t =>
+				t.setValue(this.plugin.settings.trueColour)
+					.onChange(async v => { this.plugin.settings.trueColour = v; await this.plugin.saveSettings(); })
 			);
 
 		containerEl.createEl('h3', { text: 'Android companion app' });
