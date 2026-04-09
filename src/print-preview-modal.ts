@@ -8,14 +8,13 @@ import NativePrintPlugin from './main';
 
 export type PrintExecutor = (html: string) => void;
 
-const PAGE_GAP_PX  = 12;
-const CANVAS_PAD   = 20;
-const LAYOUT_TIMEOUT = 4000;  // fallback if postMessage never arrives
+const PAGE_GAP_PX = 12;
+const CANVAS_PAD  = 20;
 
 type MarginVals = { top: number; bottom: number; left: number; right: number };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Custom Margin Sub-modal — thumb-friendly: label | slider (5mm) | steppers (1mm)
+// Custom Margin Sub-modal — steppers + sliders, synced
 // ─────────────────────────────────────────────────────────────────────────────
 class CustomMarginModal extends Modal {
 	private vals: MarginVals;
@@ -25,14 +24,14 @@ class CustomMarginModal extends Modal {
 	constructor(app: App, initial: MarginVals,
 		onConfirm: (v: MarginVals) => void, onDismiss: () => void) {
 		super(app);
-		this.vals = { ...initial };
+		this.vals      = { ...initial };
 		this.onConfirm = onConfirm;
 		this.onDismiss = onDismiss;
 	}
 
 	onOpen(): void {
 		const { contentEl } = this;
-		this.setTitle('Custom Margins');
+		this.setTitle('Custom Margins (mm)');
 
 		type MK = keyof MarginVals;
 		const sides: { label: string; key: MK }[] = [
@@ -41,33 +40,31 @@ class CustomMarginModal extends Modal {
 		];
 
 		for (const { label, key } of sides) {
-			// Row layout: [Label] ─────[slider]───── [−] [val] [+]
 			const row = contentEl.createDiv({ cls: 'np-cm-row' });
-
-			// Left: label
 			row.createSpan({ cls: 'np-cm-label', text: label });
 
-			// Centre: slider at 5mm steps — coarse positioning
+			// Stepper + value display
+			const ctrlRow = row.createDiv({ cls: 'np-cm-ctrl-row' });
+			const dec = ctrlRow.createEl('button', { cls: 'native-print-stepper', text: '−' });
+			const valSpan = ctrlRow.createSpan({
+				cls: 'native-print-stepper-value np-cm-val',
+				text: `${this.vals[key]} mm`,
+			});
+			const inc = ctrlRow.createEl('button', { cls: 'native-print-stepper', text: '+' });
+
+			// Slider
 			const slider = row.createEl('input', {
-				attr: { type: 'range', min: '0', max: '50', step: '5',
-				        value: String(this.vals[key]) },
+				attr: { type: 'range', min: '0', max: '50', step: '1', value: String(this.vals[key]) },
 			}) as HTMLInputElement;
 			slider.className = 'np-cm-slider';
 
-			// Right: stepper group at 1mm steps — fine adjustment
-			const ctrl = row.createDiv({ cls: 'np-cm-ctrl' });
-			const dec  = ctrl.createEl('button', { cls: 'np-cm-btn', text: '−' });
-			const span = ctrl.createSpan({ cls: 'np-cm-val', text: `${this.vals[key]}` });
-			ctrl.createSpan({ cls: 'np-cm-unit', text: 'mm' });
-			const inc  = ctrl.createEl('button', { cls: 'np-cm-btn', text: '+' });
-
 			const update = (v: number) => {
-				this.vals[key]  = Math.min(50, Math.max(0, v));
-				span.textContent = String(this.vals[key]);
-				slider.value    = String(this.vals[key]);
+				this.vals[key]     = Math.min(50, Math.max(0, v));
+				valSpan.textContent = `${this.vals[key]} mm`;
+				slider.value       = String(this.vals[key]);
 			};
-			dec.addEventListener('click',    () => update(this.vals[key] - 1));
-			inc.addEventListener('click',    () => update(this.vals[key] + 1));
+			dec.addEventListener('click',  () => update(this.vals[key] - 1));
+			inc.addEventListener('click',  () => update(this.vals[key] + 1));
 			slider.addEventListener('input', () => update(Number(slider.value)));
 		}
 
@@ -90,8 +87,14 @@ export class PrintPreviewModal extends Modal {
 	private readonly plugin:   NativePrintPlugin;
 	private local: PrintPluginSettings;
 
-	/** Remembers last user-typed custom margins across preset switches. */
-	private savedCustom: MarginVals;
+	/**
+	 * Remembers the last user-set custom margin values independently of
+	 * which preset is currently active. Seeded from plugin.settings on open
+	 * (if marginPreset === 'custom') or from MARGIN_PRESETS.normal otherwise.
+	 * Persists across preset switches within the session so "Custom…" always
+	 * restores what the user last typed.
+	 */
+	private savedCustomMargins: MarginVals;
 
 	private frame:        HTMLIFrameElement | null = null;
 	private wrapper:      HTMLDivElement    | null = null;
@@ -100,11 +103,8 @@ export class PrintPreviewModal extends Modal {
 
 	private debounceTimer:   ReturnType<typeof setTimeout> | null = null;
 	private scrollFadeTimer: ReturnType<typeof setTimeout> | null = null;
-	/** Message handler reference — stored so it can be removed on re-render. */
-	private msgHandler:      ((e: MessageEvent) => void) | null = null;
-	private layoutTimeout:   ReturnType<typeof setTimeout> | null = null;
+	private marginsSelect:   HTMLSelectElement | null = null;
 
-	private marginsSelect: HTMLSelectElement | null = null;
 	private scale    = 1;
 	private scaledPH = 0;
 	private nPages   = 1;
@@ -116,8 +116,10 @@ export class PrintPreviewModal extends Modal {
 		this.onPrint  = onPrint;  this.plugin = plugin;
 		this.local    = { ...settings };
 
+		// Seed savedCustomMargins from persisted settings if they were custom,
+		// otherwise from the normal preset defaults.
 		const p = MARGIN_PRESETS.normal;
-		this.savedCustom = settings.marginPreset === 'custom'
+		this.savedCustomMargins = settings.marginPreset === 'custom'
 			? { top: settings.marginTop, bottom: settings.marginBottom,
 			    left: settings.marginLeft, right: settings.marginRight }
 			: { top: p.top, bottom: p.bottom, left: p.left, right: p.right };
@@ -128,14 +130,13 @@ export class PrintPreviewModal extends Modal {
 		modalEl.addClass('native-print-preview-modal');
 		this.setTitle(`Print Preview — ${this.title}`);
 
+		// ── 1. Preview area ────────────────────────────────────────────────
 		const previewArea = contentEl.createDiv({ cls: 'native-print-preview-area' });
 		this.scrollCanvas = previewArea.createDiv({ cls: 'np-scroll-canvas' });
 		const scrollPad   = this.scrollCanvas.createDiv({ cls: 'np-scroll-pad' });
 		this.wrapper      = scrollPad.createDiv({ cls: 'np-frame-wrapper' });
-		// allow-scripts enables the page-break algorithm inside the srcdoc.
-		this.frame = this.wrapper.createEl('iframe', {
-			cls: 'native-print-preview-frame',
-			attr: { sandbox: 'allow-same-origin allow-scripts' },
+		this.frame        = this.wrapper.createEl('iframe', {
+			cls: 'native-print-preview-frame', attr: { sandbox: 'allow-same-origin' },
 		}) as HTMLIFrameElement;
 
 		this.pageCounter = previewArea.createDiv({ cls: 'np-page-counter' });
@@ -144,7 +145,9 @@ export class PrintPreviewModal extends Modal {
 
 		this.renderFrame();
 
+		// ── 2. Toolbar ─────────────────────────────────────────────────────
 		const toolbar = contentEl.createDiv({ cls: 'native-print-toolbar' });
+
 		this.addSelect(toolbar, 'Paper', {
 			A3: 'A3', A4: 'A4', A5: 'A5', Letter: 'Letter', Legal: 'Legal', Tabloid: 'Tabloid',
 		}, this.local.pageSize, v => { this.local.pageSize = v as PageSize; this.scheduleRerender(); });
@@ -158,13 +161,16 @@ export class PrintPreviewModal extends Modal {
 		}, this.local.marginPreset, v => {
 			if (v === 'custom') {
 				this.openCustomMarginModal();
+				// Reset displayed value to last non-custom preset so 'Custom…'
+				// can be re-selected (change event won't fire on same value).
 				if (this.marginsSelect)
 					this.marginsSelect.value = this.local.marginPreset === 'custom'
 						? 'normal' : this.local.marginPreset;
 				return;
 			}
-			const p = MARGIN_PRESETS[v as MarginPreset];
-			this.local = { ...this.local, marginPreset: v as MarginPreset,
+			const key = v as MarginPreset;
+			const p   = MARGIN_PRESETS[key];
+			this.local = { ...this.local, marginPreset: key,
 				marginTop: p.top, marginBottom: p.bottom, marginLeft: p.left, marginRight: p.right };
 			this.scheduleRerender();
 		});
@@ -174,10 +180,14 @@ export class PrintPreviewModal extends Modal {
 		});
 		this.addCircleToggle(toolbar, 'Title',    this.local.includeTitle,           v => { this.local.includeTitle = v;            this.scheduleRerender(); });
 		this.addCircleToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, v => { this.local.includeYamlFrontmatter = v; this.scheduleRerender(); });
+		this.addCircleToggle(toolbar, 'Wrap',     this.local.codeWrap,               v => { this.local.codeWrap = v;                this.scheduleRerender(); });
+		this.addCircleToggle(toolbar, 'Colour',   this.local.trueColour,             v => { this.local.trueColour = v;              this.scheduleRerender(); });
 
+		// ── 3. Button row ──────────────────────────────────────────────────
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
 		btnRow.createEl('button', { text: 'Cancel' }).addEventListener('click', () => this.close());
 		btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' }).addEventListener('click', () => {
+			// Persist current full local settings (incl. any toolbar changes) on Print.
 			this.plugin.settings = { ...this.plugin.settings, ...this.local };
 			void this.plugin.saveSettings();
 			this.close();
@@ -188,8 +198,6 @@ export class PrintPreviewModal extends Modal {
 	onClose(): void {
 		if (this.debounceTimer)   clearTimeout(this.debounceTimer);
 		if (this.scrollFadeTimer) clearTimeout(this.scrollFadeTimer);
-		if (this.layoutTimeout)   clearTimeout(this.layoutTimeout);
-		this.removeMsgHandler();
 		this.contentEl.empty();
 	}
 
@@ -197,8 +205,9 @@ export class PrintPreviewModal extends Modal {
 
 	private onScroll(): void {
 		if (!this.scrollCanvas || !this.pageCounter || this.scaledPH === 0) return;
-		const pg = Math.min(this.nPages,
-			Math.floor(this.scrollCanvas.scrollTop / (this.scaledPH + PAGE_GAP_PX)) + 1);
+		const scrollTop = this.scrollCanvas.scrollTop;
+		const slotH     = this.scaledPH + PAGE_GAP_PX;
+		const pg        = Math.min(this.nPages, Math.floor(scrollTop / slotH) + 1);
 		this.pageCounter.textContent = `${pg} / ${this.nPages}`;
 		this.pageCounter.classList.add('np-pc-visible');
 		if (this.scrollFadeTimer) clearTimeout(this.scrollFadeTimer);
@@ -211,19 +220,32 @@ export class PrintPreviewModal extends Modal {
 	private openCustomMarginModal(): void {
 		const { modalEl } = this;
 		modalEl.addClass('native-print-blurred');
+
 		new CustomMarginModal(this.app,
-			{ ...this.savedCustom },
+			// Always seed with savedCustomMargins so switching presets
+			// and back to Custom restores the user's last typed values.
+			{ ...this.savedCustomMargins },
 			v => {
-				this.savedCustom = { ...v };
+				// 1. Remember custom values across preset switches.
+				this.savedCustomMargins = { ...v };
+
+				// 2. Apply to live preview.
 				this.local = { ...this.local, marginPreset: 'custom',
-					marginTop: v.top, marginBottom: v.bottom, marginLeft: v.left, marginRight: v.right };
+					marginTop: v.top, marginBottom: v.bottom,
+					marginLeft: v.left, marginRight: v.right };
+
+				// 3. Persist margins immediately — independent of other toolbar
+				//    settings so they survive preset switches and restarts.
 				this.plugin.settings.marginPreset = 'custom';
 				this.plugin.settings.marginTop    = v.top;
 				this.plugin.settings.marginBottom = v.bottom;
 				this.plugin.settings.marginLeft   = v.left;
 				this.plugin.settings.marginRight  = v.right;
 				void this.plugin.saveSettings();
+
+				// 4. Update select display.
 				if (this.marginsSelect) this.marginsSelect.value = 'custom';
+
 				this.scheduleRerender();
 			},
 			() => modalEl.removeClass('native-print-blurred')
@@ -236,46 +258,22 @@ export class PrintPreviewModal extends Modal {
 		if (!this.frame || !this.wrapper) return;
 		const { paperW, pageH } = this.paperPx();
 		this.applyScale(paperW, pageH);
-		this.removeMsgHandler();
-		if (this.layoutTimeout) { clearTimeout(this.layoutTimeout); this.layoutTimeout = null; }
-
-		// Listen for the page-break script's postMessage (or fall back on timeout).
-		this.msgHandler = (e: MessageEvent) => {
-			if (e.source !== this.frame?.contentWindow) return;
-			if ((e.data as { type?: string })?.type !== 'np-layout-ready') return;
-			this.removeMsgHandler();
-			if (this.layoutTimeout) { clearTimeout(this.layoutTimeout); this.layoutTimeout = null; }
-			this.onFrameLoaded(paperW, pageH, (e.data as { scrollH: number }).scrollH);
-		};
-		window.addEventListener('message', this.msgHandler);
-
-		// Fallback: if postMessage never arrives (e.g. script blocked), use scrollHeight directly.
-		this.layoutTimeout = setTimeout(() => {
-			this.removeMsgHandler();
-			const sh = this.frame?.contentDocument?.documentElement?.scrollHeight ?? pageH;
-			this.onFrameLoaded(paperW, pageH, sh);
-		}, LAYOUT_TIMEOUT);
-
 		this.frame.srcdoc = buildHelperUrl.wrapDocument(this.fragment, this.title, this.local);
+		this.frame.addEventListener('load', () => this.onFrameLoaded(paperW, pageH), { once: true });
 	}
 
-	private removeMsgHandler(): void {
-		if (this.msgHandler) {
-			window.removeEventListener('message', this.msgHandler);
-			this.msgHandler = null;
-		}
-	}
+	private onFrameLoaded(paperW: number, pageH: number): void {
+		if (!this.frame?.contentDocument || !this.wrapper) return;
 
-	private onFrameLoaded(paperW: number, pageH: number, scrollH: number): void {
-		if (!this.frame || !this.wrapper) return;
-
-		this.nPages   = Math.max(1, Math.ceil(scrollH / pageH));
-		const totalH  = this.nPages * pageH;
-		this.scaledPH = Math.round(pageH  * this.scale);
+		const scrollH  = this.frame.contentDocument.documentElement.scrollHeight;
+		this.nPages    = Math.max(1, Math.ceil(scrollH / pageH));
+		const totalH   = this.nPages * pageH;
+		this.scaledPH  = Math.round(pageH  * this.scale);
 		const scaledPW = Math.round(paperW * this.scale);
 
 		this.wrapper.querySelectorAll('.np-page-gap, .np-page-overlay').forEach(el => el.remove());
 		this.frame.style.height = `${totalH}px`;
+
 		this.wrapper.style.height =
 			`${this.scaledPH * this.nPages + PAGE_GAP_PX * (this.nPages - 1)}px`;
 
@@ -290,34 +288,41 @@ export class PrintPreviewModal extends Modal {
 
 			if (i > 0) {
 				const gap = this.wrapper.createDiv({ cls: 'np-page-gap' });
-				gap.style.cssText = `top:${slotTop - PAGE_GAP_PX}px;height:${PAGE_GAP_PX}px;width:${scaledPW}px;`;
+				gap.style.top    = `${slotTop - PAGE_GAP_PX}px`;
+				gap.style.height = `${PAGE_GAP_PX}px`;
+				gap.style.width  = `${scaledPW}px`;
 			}
 
 			const overlay = this.wrapper.createDiv({ cls: 'np-page-overlay' });
-			overlay.style.cssText = `top:${slotTop}px;width:${scaledPW}px;height:${this.scaledPH}px;`;
+			overlay.style.top    = `${slotTop}px`;
+			overlay.style.width  = `${scaledPW}px`;
+			overlay.style.height = `${this.scaledPH}px`;
 
-			// Margin bands: solid white base + diagonal hatch — occludes overflow.
+			// Four margin bands: solid white base + diagonal hatch on top.
+			// White base fully occludes overflowing iframe content.
 			type Band = { cls: string; t?: string; r?: string; b?: string; l?: string; w?: string; h?: string };
 			const bands: Band[] = [
-				{ cls: 'np-mb-top',    t: '0',       l: '0', r: '0',       h: `${mT}px` },
-				{ cls: 'np-mb-bottom', b: '0',       l: '0', r: '0',       h: `${mB}px` },
-				{ cls: 'np-mb-left',   t: `${mT}px`, b: `${mB}px`, l: '0', w: `${mL}px` },
-				{ cls: 'np-mb-right',  t: `${mT}px`, b: `${mB}px`, r: '0', w: `${mR}px` },
+				{ cls: 'np-mb-top',    t: '0',       l: '0', r: '0',       h: `${mT}px`  },
+				{ cls: 'np-mb-bottom', b: '0',       l: '0', r: '0',       h: `${mB}px`  },
+				{ cls: 'np-mb-left',   t: `${mT}px`, b: `${mB}px`, l: '0', w: `${mL}px`  },
+				{ cls: 'np-mb-right',  t: `${mT}px`, b: `${mB}px`, r: '0', w: `${mR}px`  },
 			];
 			for (const b of bands) {
 				const el = overlay.createDiv({ cls: `np-margin-band ${b.cls}` });
-				let css = 'position:absolute;';
-				if (b.t !== undefined) css += `top:${b.t};`;
-				if (b.b !== undefined) css += `bottom:${b.b};`;
-				if (b.l !== undefined) css += `left:${b.l};`;
-				if (b.r !== undefined) css += `right:${b.r};`;
-				if (b.w !== undefined) css += `width:${b.w};`;
-				if (b.h !== undefined) css += `height:${b.h};`;
-				el.style.cssText = css;
+				if (b.t !== undefined) el.style.top    = b.t;
+				if (b.b !== undefined) el.style.bottom = b.b;
+				if (b.l !== undefined) el.style.left   = b.l;
+				if (b.r !== undefined) el.style.right  = b.r;
+				if (b.w !== undefined) el.style.width  = b.w;
+				if (b.h !== undefined) el.style.height = b.h;
 			}
 
 			const guide = overlay.createDiv({ cls: 'np-margin-guide' });
-			guide.style.cssText = `top:${mT}px;right:${mR}px;bottom:${mB}px;left:${mL}px;`;
+			guide.style.top    = `${mT}px`;
+			guide.style.right  = `${mR}px`;
+			guide.style.bottom = `${mB}px`;
+			guide.style.left   = `${mL}px`;
+
 			(['np-ct-tl', 'np-ct-tr', 'np-ct-bl', 'np-ct-br'] as const)
 				.forEach(cls => guide.createDiv({ cls: `np-corner-target ${cls}` }));
 		}
@@ -335,14 +340,17 @@ export class PrintPreviewModal extends Modal {
 		if (!this.frame || !this.wrapper || !this.scrollCanvas) return;
 		const availW = this.scrollCanvas.clientWidth - CANVAS_PAD * 2;
 		this.scale   = Math.min(1, availW > 0 ? availW / paperW : 1);
-		this.frame.style.cssText = `width:${paperW}px;height:${pageH}px;transform:scale(${this.scale});transform-origin:top left;`;
+		this.frame.style.width           = `${paperW}px`;
+		this.frame.style.height          = `${pageH}px`;
+		this.frame.style.transform       = `scale(${this.scale})`;
+		this.frame.style.transformOrigin = 'top left';
 		this.wrapper.style.width  = `${Math.round(paperW * this.scale)}px`;
 		this.wrapper.style.height = `${Math.round(pageH  * this.scale)}px`;
 	}
 
 	private scheduleRerender(): void {
 		if (this.debounceTimer) clearTimeout(this.debounceTimer);
-		this.debounceTimer = setTimeout(() => this.renderFrame(), 300);
+		this.debounceTimer = setTimeout(() => this.renderFrame(), 250);
 	}
 
 	// ── Control builders ──────────────────────────────────────────────────────

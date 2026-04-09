@@ -5,6 +5,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.3.0] — 2026-04-08
+
+### Added
+
+#### Code-block text-wrap (`codeWrap`)
+New setting and preview-toolbar toggle. When **on**, long lines inside `<pre>`
+and `<code>` blocks wrap (`white-space: pre-wrap; word-break: break-all`).
+When **off** (default), natural line breaks are preserved and the block scrolls
+horizontally in the preview (`overflow-x: auto`). Useful for printing code-heavy
+notes where truncation would hide content.
+
+#### Image inline embedding (`inlineImages`)
+New setting (default **on**). After Obsidian renders the markdown, every `<img>`
+element whose `src` resolves to a vault file is replaced with a `data:` URI
+containing the base64-encoded file contents. Resolution covers:
+- `app://local/` Obsidian internal scheme
+- Vault-relative paths
+- Bare filenames via `fileMap` (handles cross-folder references)
+- `MetadataCache.getFirstLinkpathDest` fallback for wikilink short names
+
+Supported formats: PNG, JPEG, GIF, WebP, SVG, BMP.
+Non-fatal: if a file cannot be read, the original `src` is left unchanged.
+**Required for images to print on Android** — without inlining, the APK
+receives an HTML file it has no access to load vault images from.
+
+#### True-colour output (`trueColour`)
+New setting and preview-toolbar toggle (default **off**). When **off**, the
+output forces `body { color: #000 }` and `a { color: #000 }` for printer
+economy. When **on**, all original note colours are preserved — useful for
+notes with intentional colour coding, callout highlights, or brand styling.
+
+### Changed
+- `renderer.ts` `renderNoteToHtml()` accepts optional `inlineImages: boolean`
+  (fourth argument). Called from `print-command.ts` with `plugin.settings.inlineImages`.
+- `html-builder.ts` `wrapDocument()` generates `colourRules` and `codeWrapRule`
+  blocks conditionally; `body { color }` and `a { color }` are no longer hardcoded.
+- Preview toolbar: `Wrap` and `Colour` circle toggles added alongside `Title`/`Metadata`.
+- Settings tab: new **Output quality** section with three toggles.
+
 ## [2.2.0] — 2026-04-08
 
 ### Known issues (deferred to next cycle)
