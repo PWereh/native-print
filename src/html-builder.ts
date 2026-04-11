@@ -1,39 +1,32 @@
+import { App } from 'obsidian';
 import { PrintPluginSettings, PAGE_DIMS_MM, PX_PER_MM } from './settings';
+import { loadEnabledSnippetsCss } from './snippet-loader';
 
 function escapeHtml(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function previewOverlayCss(s: PrintPluginSettings): string {
+	const [pw, ph] = PAGE_DIMS_MM[s.pageSize] ?? [210, 297];
+	const [wMm]    = s.orientation === 'landscape' ? [ph, pw] : [pw, ph];
+	const paperWpx = Math.round(wMm * PX_PER_MM);
 	const { marginTop: T, marginBottom: B, marginLeft: L, marginRight: R } = s;
-	const [pw, ph]   = PAGE_DIMS_MM[s.pageSize] ?? [210, 297];
-	const [wMm]      = s.orientation === 'landscape' ? [ph, pw] : [pw, ph];
-	const paperWpx   = Math.round(wMm * PX_PER_MM);
-
 	return `
     @media screen {
-      /* ── Content area exact to paper ──────────────────────────────── */
       body {
-        width:   ${paperWpx}px !important;
-        padding: ${T}mm ${R}mm ${B}mm ${L}mm !important;
-        margin:  0 !important;
-        overflow: hidden !important;
-        /* Contain all children: nothing grows beyond the body box. */
+        width:     ${paperWpx}px !important;
+        padding:   ${T}mm ${R}mm ${B}mm ${L}mm !important;
+        margin:    0 !important;
+        overflow:  hidden !important;
         max-width: ${paperWpx}px !important;
       }
-      /* Constrain every direct block-level child to the content width. */
-      body > * {
-        max-width: 100% !important;
-        overflow:  hidden !important;
-      }
-      /* Code: wrap aggressively — never extend past content column. */
+      body > * { max-width: 100% !important; overflow: hidden !important; }
       pre, code, kbd, samp {
-        white-space: pre-wrap  !important;
+        white-space: pre-wrap !important;
         word-break:  break-all !important;
         overflow-x:  hidden    !important;
         max-width:   100%      !important;
       }
-      /* Tables: fixed layout prevents table cells from stretching. */
       table {
         table-layout: fixed  !important;
         width:        100%   !important;
@@ -44,23 +37,40 @@ function previewOverlayCss(s: PrintPluginSettings): string {
     }`;
 }
 
-function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): string {
+/**
+ * Assembles a complete, self-contained print-ready HTML document.
+ *
+ * @param app   - Obsidian App instance; required to resolve CSS snippet files.
+ *                Pass undefined only in contexts where snippets are not needed.
+ * @param bodyHtml - Pre-rendered HTML fragment from the Markdown renderer.
+ * @param title    - Note basename (used as <title> and optional h1 heading).
+ * @param s        - Current plugin settings.
+ */
+async function wrapDocument(
+	bodyHtml: string,
+	title: string,
+	s: PrintPluginSettings,
+	app?: App
+): Promise<string> {
 	const titleHeading = s.includeTitle
 		? `<h1 class="np-doc-title">${escapeHtml(title)}</h1>\n`
 		: '';
 
-	// True-colour: when OFF force black text/links for printer economy.
-	// When ON preserve the note's original colours.
+	// True-colour: off → force #000 for printer economy; on → preserve note colours.
 	const colourRules = s.trueColour
 		? ''
 		: `body { color: #000; background: #fff; }
-    a  { color: #000; }`;
+    a    { color: #000; }`;
 
-	// Code-wrap: when ON, long lines wrap (better for print).
-	// When OFF, honour natural line breaks (default behaviour).
+	// Code-wrap: on → pre-wrap (long lines wrap); off → overflow-x:auto.
 	const codeWrapRule = s.codeWrap
 		? `pre, code { white-space: pre-wrap !important; word-break: break-all !important; }`
 		: `pre { overflow-x: auto; }`;
+
+	// CSS snippets: read enabled files from .obsidian/snippets/
+	const snippetCss = (app && s.enabledSnippets?.length)
+		? await loadEnabledSnippetsCss(app, s.enabledSnippets)
+		: '';
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -75,9 +85,9 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
     *, *::before, *::after { box-sizing: border-box; }
     body {
       font-family: ${s.fontFamily};
-      font-size: ${s.fontSize}pt;
+      font-size:   ${s.fontSize}pt;
       line-height: 1.6;
-      margin: 0;
+      margin:      0;
     }
     ${colourRules}
     .np-doc-title { margin: 0 0 0.75em; font-size: 1.6em; border-bottom: 1px solid #ccc; padding-bottom: 0.25em; }
@@ -95,6 +105,7 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
     blockquote { border-left: 3px solid #999; margin: 0; padding-left: 16px; }
     hr { border: none; border-top: 1px solid #ccc; margin: 1em 0; }
     ${s.includeYamlFrontmatter ? '' : '.frontmatter, .frontmatter-container { display: none !important; }'}
+    ${snippetCss ? `/* ── Print CSS Snippets ── */\n${snippetCss}` : ''}
     ${previewOverlayCss(s)}
   </style>
 </head>
@@ -104,9 +115,10 @@ function wrapDocument(bodyHtml: string, title: string, s: PrintPluginSettings): 
 
 function toIntentUrl(base64Html: string, s: PrintPluginSettings, docTitle = 'Document'): string {
 	const settings = JSON.stringify({
-		pageSize: s.pageSize, orientation: s.orientation,
-		marginTop: s.marginTop, marginBottom: s.marginBottom,
-		marginLeft: s.marginLeft, marginRight: s.marginRight, docTitle,
+		pageSize:     s.pageSize,     orientation:   s.orientation,
+		marginTop:    s.marginTop,    marginBottom:  s.marginBottom,
+		marginLeft:   s.marginLeft,   marginRight:   s.marginRight,
+		docTitle,
 	});
 	return (
 		'obsidian-print-helper://print' +

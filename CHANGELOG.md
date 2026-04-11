@@ -5,6 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.4.0] — 2026-04-11
+
+### Added
+
+#### Print CSS snippets injection
+New section **Print CSS snippets** in the Settings tab (deep settings).
+
+- **`src/snippet-loader.ts`** — new module:
+  - `listSnippets(app, enabledSnippets)` — reads `<vault>/<configDir>/snippets/`
+    via `app.vault.adapter.list()` and returns every `.css` file with its current
+    enabled state. Resolves `configDir` from `app.vault.configDir` (normally
+    `.obsidian`) so it honours overridden config-folder paths.
+  - `loadEnabledSnippetsCss(app, enabledSnippets)` — reads and concatenates all
+    enabled snippet files in order. Non-fatal per file; unreadable files are
+    silently skipped. Each block is preceded by a `/* ── snippet: filename ── */`
+    comment for debuggability in print output.
+
+- **`src/settings.ts`** — `enabledSnippets: string[]` (default `[]`) added to
+  `PrintPluginSettings`. `PrintSettingTab.display()` renders the snippet panel:
+  snippet rows with filename + toggle switch; **↻ Reload** button refreshes the
+  list from disk. Toggling a snippet persists immediately via `saveSettings()`.
+
+- **`src/html-builder.ts`** — `wrapDocument()` is now `async`. Accepts optional
+  `app?: App` fourth argument. When snippets are enabled, `loadEnabledSnippetsCss()`
+  is awaited and injected inside the document `<style>` block, after all base
+  styles and before the `@media screen` preview overlay CSS. Snippet CSS therefore
+  overrides base rules but is overridden by preview-only constraints.
+
+- Callers updated:
+  - `print-command.ts` — `preparePrint()` now `await`s `wrapDocument()`, passes `plugin.app`.
+  - `print-preview-modal.ts` — Print button uses a `void (async () => { … })()` IIFE;
+    `renderFrame()` chains `.then(html => frame.srcdoc = html)` on the promise.
+
+- **`styles.css`** — snippet panel UI: `.np-snippet-list`, `.np-snippet-row`,
+  `.np-snippet-name`, custom toggle (`label + ::after` pill, accent colour when
+  checked), reload button, empty-state message.
+
+#### Observed issues logged
+
+**`#mermaid-codeblock-001` — Mermaid diagrams print as code blocks**
+Obsidian renders Mermaid diagrams dynamically via a post-processor that fires
+after `MarkdownRenderer.render()` returns. The rendered container captures the
+pre-processor HTML (`<pre><code class="language-mermaid">…</code></pre>`) rather
+than the SVG the user sees on screen.
+Fix direction: capture the live DOM from the active MarkdownView rather than
+re-rendering from markdown source, or wait for post-processors via a
+`Component` lifecycle hook.
+
+### Changed
+
+#### Orientation implementation — novel Android approach (documented)
+`@page { size: A4 landscape }` works in desktop browsers but has no effect on
+Android's `PrintManager`. The correct Android API is:
+
+```kotlin
+PrintAttributes.MediaSize.ISO_A4.asPortrait()   // or
+PrintAttributes.MediaSize.ISO_A4.asLandscape()
+```
+
+`MainActivity.kt` calls `buildMediaSize(settings)` which maps the `pageSize`
+string to the appropriate `PrintAttributes.MediaSize` constant, then calls
+`.asPortrait()` or `.asLandscape()` depending on the `orientation` field from
+the settings JSON. This is believed to be the first Obsidian plugin to implement
+orientation-aware Android printing — the standard PDF approach of relying on
+`@page` CSS is ineffective on Android's print stack.
+
 ## [2.3.0] — 2026-04-08
 
 ### Added

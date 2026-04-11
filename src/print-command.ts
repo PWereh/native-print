@@ -67,7 +67,7 @@ async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Pr
 	const settings = plugin.settings;
 
 	if (skipPreview || !settings.showPreview) {
-		const fullHtml = buildHelperUrl.wrapDocument(fragment, title, settings);
+		const fullHtml = await buildHelperUrl.wrapDocument(fragment, title, settings, plugin.app);
 		getPrintExecutor(plugin, title)(fullHtml);
 		return;
 	}

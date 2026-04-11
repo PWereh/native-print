@@ -460,72 +460,209 @@
 .np-custom-btn-row {
 	display:         flex;
 	justify-content: flex-end;
-	gap:             8px;
-	margin-top:      16px;
+	gap:             10px;
+	margin-top:      18px;
 }
 .np-custom-btn-row button {
-	min-height: 36px;
-	min-width:  80px;
-	border-radius: 10px;
-	padding:    0 16px;
-	cursor:     pointer;
-	border:     none;
-	font-size:  13px;
+	min-height:    42px;
+	min-width:     90px;
+	border-radius: 21px;
+	padding:       0 20px;
+	cursor:        pointer;
+	border:        none;
+	font-size:     13.5px;
+	font-weight:   500;
 }
 
-/* ── Custom margin sub-modal rows ───────────────────────────────── */
+/* ── Custom margin sub-modal ─────────────────────────────────────── */
+/* One horizontal row per side: [Label] ──[slider 5mm]── [− val mm +] */
 .np-cm-row {
-	display:         flex;
-	flex-direction:  column;
-	gap:             4px;
-	padding:         8px 0;
-	border-bottom:   1px solid var(--background-modifier-border);
+	display:     flex;
+	align-items: center;
+	gap:         12px;
+	padding:     10px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
 }
 .np-cm-row:last-of-type { border-bottom: none; }
 
 .np-cm-label {
-	font-size:   12px;
-	font-weight: 500;
+	min-width:   52px;
+	font-size:   13.5px;
+	font-weight: 600;
 	color:       var(--text-normal);
+	flex-shrink: 0;
 }
 
-/* Stepper buttons + value on one row */
-.np-cm-ctrl-row {
-	display:     flex;
-	align-items: center;
-	gap:         6px;
-}
-
-/* Value span — wider than toolbar variant */
-.np-cm-val {
-	min-width: 52px;
-}
-
-/* Slider */
+/* Centre: coarse 5mm slider */
 .np-cm-slider {
+	flex:              1;
 	-webkit-appearance: none;
-	appearance:  none;
-	width:       100%;
-	height:      4px;
-	border-radius: 2px;
-	background:  var(--background-modifier-border);
-	outline:     none;
-	cursor:      pointer;
+	appearance:         none;
+	height:            4px;
+	border-radius:     2px;
+	background:        var(--background-modifier-border);
+	outline:           none;
+	cursor:            pointer;
+	min-width:         0;
 }
 .np-cm-slider::-webkit-slider-thumb {
 	-webkit-appearance: none;
-	width:         16px;
-	height:        16px;
+	width:         26px;
+	height:        26px;
 	border-radius: 50%;
 	background:    var(--interactive-accent);
 	cursor:        pointer;
-	box-shadow:    0 1px 4px rgba(0,0,0,0.30);
+	box-shadow:    0 1px 5px rgba(0,0,0,0.35);
+	border:        2px solid rgba(255,255,255,0.30);
 }
 .np-cm-slider::-moz-range-thumb {
+	width:         26px;
+	height:        26px;
+	border-radius: 50%;
+	border:        2px solid rgba(255,255,255,0.30);
+	background:    var(--interactive-accent);
+	cursor:        pointer;
+}
+
+/* Right: fine stepper group 1mm */
+.np-cm-ctrl {
+	display:     flex;
+	align-items: center;
+	gap:         5px;
+	flex-shrink: 0;
+}
+
+/* Pill circle buttons — thumb-friendly 40px */
+.np-cm-btn {
+	width:         40px;
+	height:        40px;
+	border-radius: 50%;
+	border:        1px solid var(--background-modifier-border);
+	background:    var(--background-secondary);
+	color:         var(--text-normal);
+	font-size:     20px;
+	font-weight:   300;
+	line-height:   1;
+	display:       flex;
+	align-items:   center;
+	justify-content: center;
+	cursor:        pointer;
+	flex-shrink:   0;
+	transition:    background 0.12s;
+	-webkit-tap-highlight-color: transparent;
+}
+.np-cm-btn:hover  { background: var(--background-modifier-hover); }
+.np-cm-btn:active { opacity: 0.65; }
+
+/* Value + unit display */
+.np-cm-val {
+	min-width:    26px;
+	text-align:   right;
+	font-size:    13px;
+	font-weight:  500;
+	font-variant-numeric: tabular-nums;
+}
+.np-cm-unit {
+	font-size:   12px;
+	color:       var(--text-muted);
+	margin-left: 1px;
+}
+
+/* ── CSS Snippets panel (settings tab) ──────────────────────────── */
+.np-snippet-desc {
+	font-size:    13px;
+	color:        var(--text-muted);
+	margin-bottom: 8px;
+}
+
+.np-snippet-header {
+	display:       flex;
+	align-items:   center;
+	margin-bottom: 6px;
+}
+
+.np-snippet-reload {
+	font-size:     12px;
+	padding:       3px 10px;
+	border-radius: 10px;
+	border:        1px solid var(--background-modifier-border);
+	background:    var(--background-secondary);
+	color:         var(--text-muted);
+	cursor:        pointer;
+}
+.np-snippet-reload:hover { color: var(--text-normal); }
+
+.np-snippet-list {
+	display:        flex;
+	flex-direction: column;
+	gap:            2px;
+	border:         1px solid var(--background-modifier-border);
+	border-radius:  6px;
+	padding:        4px;
+	background:     var(--background-primary);
+	min-height:     40px;
+}
+
+.np-snippet-empty {
+	font-size:  12px;
+	color:      var(--text-muted);
+	padding:    8px;
+	text-align: center;
+}
+
+.np-snippet-row {
+	display:     flex;
+	align-items: center;
+	padding:     6px 8px;
+	border-radius: 4px;
+	gap:         8px;
+}
+.np-snippet-row:hover { background: var(--background-modifier-hover); }
+
+.np-snippet-name {
+	flex:          1;
+	font-size:     13px;
+	font-family:   monospace;
+	color:         var(--text-normal);
+	overflow:      hidden;
+	text-overflow: ellipsis;
+	white-space:   nowrap;
+}
+
+/* Toggle — reuse Obsidian's own checkbox-toggle style */
+.np-snippet-toggle {
+	flex-shrink: 0;
+	display:     flex;
+	align-items: center;
+}
+.np-snippet-toggle input[type="checkbox"] {
+	display: none;
+}
+.np-snippet-toggle-label {
+	display:       block;
+	width:         36px;
+	height:        20px;
+	border-radius: 10px;
+	background:    var(--background-modifier-border);
+	cursor:        pointer;
+	position:      relative;
+	transition:    background 0.15s;
+}
+.np-snippet-toggle-label::after {
+	content:       '';
+	position:      absolute;
+	top:           2px;
+	left:          2px;
 	width:         16px;
 	height:        16px;
 	border-radius: 50%;
-	border:        none;
-	background:    var(--interactive-accent);
-	cursor:        pointer;
+	background:    #fff;
+	box-shadow:    0 1px 3px rgba(0,0,0,0.3);
+	transition:    transform 0.15s;
+}
+.np-snippet-toggle input:checked + .np-snippet-toggle-label {
+	background: var(--interactive-accent);
+}
+.np-snippet-toggle input:checked + .np-snippet-toggle-label::after {
+	transform: translateX(16px);
 }
