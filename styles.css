@@ -567,3 +567,102 @@
 	color:       var(--text-muted);
 	margin-left: 1px;
 }
+
+/* ── CSS Snippets panel (settings tab) ──────────────────────────── */
+.np-snippet-desc {
+	font-size:    13px;
+	color:        var(--text-muted);
+	margin-bottom: 8px;
+}
+
+.np-snippet-header {
+	display:       flex;
+	align-items:   center;
+	margin-bottom: 6px;
+}
+
+.np-snippet-reload {
+	font-size:     12px;
+	padding:       3px 10px;
+	border-radius: 10px;
+	border:        1px solid var(--background-modifier-border);
+	background:    var(--background-secondary);
+	color:         var(--text-muted);
+	cursor:        pointer;
+}
+.np-snippet-reload:hover { color: var(--text-normal); }
+
+.np-snippet-list {
+	display:        flex;
+	flex-direction: column;
+	gap:            2px;
+	border:         1px solid var(--background-modifier-border);
+	border-radius:  6px;
+	padding:        4px;
+	background:     var(--background-primary);
+	min-height:     40px;
+}
+
+.np-snippet-empty {
+	font-size:  12px;
+	color:      var(--text-muted);
+	padding:    8px;
+	text-align: center;
+}
+
+.np-snippet-row {
+	display:     flex;
+	align-items: center;
+	padding:     6px 8px;
+	border-radius: 4px;
+	gap:         8px;
+}
+.np-snippet-row:hover { background: var(--background-modifier-hover); }
+
+.np-snippet-name {
+	flex:          1;
+	font-size:     13px;
+	font-family:   monospace;
+	color:         var(--text-normal);
+	overflow:      hidden;
+	text-overflow: ellipsis;
+	white-space:   nowrap;
+}
+
+/* Toggle — reuse Obsidian's own checkbox-toggle style */
+.np-snippet-toggle {
+	flex-shrink: 0;
+	display:     flex;
+	align-items: center;
+}
+.np-snippet-toggle input[type="checkbox"] {
+	display: none;
+}
+.np-snippet-toggle-label {
+	display:       block;
+	width:         36px;
+	height:        20px;
+	border-radius: 10px;
+	background:    var(--background-modifier-border);
+	cursor:        pointer;
+	position:      relative;
+	transition:    background 0.15s;
+}
+.np-snippet-toggle-label::after {
+	content:       '';
+	position:      absolute;
+	top:           2px;
+	left:          2px;
+	width:         16px;
+	height:        16px;
+	border-radius: 50%;
+	background:    #fff;
+	box-shadow:    0 1px 3px rgba(0,0,0,0.3);
+	transition:    transform 0.15s;
+}
+.np-snippet-toggle input:checked + .np-snippet-toggle-label {
+	background: var(--interactive-accent);
+}
+.np-snippet-toggle input:checked + .np-snippet-toggle-label::after {
+	transform: translateX(16px);
+}

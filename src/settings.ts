@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import NativePrintPlugin from './main';
+import { listSnippets, SnippetEntry } from './snippet-loader';
 
 export type PageSize = 'A3' | 'A4' | 'A5' | 'Letter' | 'Legal' | 'Tabloid';
 export type MarginPreset = 'normal' | 'narrow' | 'wide' | 'custom';
@@ -37,6 +38,8 @@ export interface PrintPluginSettings {
 	inlineImages: boolean;
 	/** Preserve original text/link colours instead of forcing black-on-white. */
 	trueColour: boolean;
+	/** Filenames of .obsidian/snippets/*.css files to inject into every print output. */
+	enabledSnippets: string[];
 }
 
 export const MARGIN_PRESETS: Record<MarginPreset, { top: number; bottom: number; left: number; right: number }> = {
@@ -71,14 +74,57 @@ export const DEFAULT_SETTINGS: PrintPluginSettings = {
 	codeWrap: false,
 	inlineImages: true,
 	trueColour: false,
+	enabledSnippets: [],
 };
 
 export class PrintSettingTab extends PluginSettingTab {
 	plugin: NativePrintPlugin;
+	private snippetListEl: HTMLElement | null = null;
 
 	constructor(app: App, plugin: NativePrintPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	/** Refreshes the snippet toggle list without rebuilding the whole tab. */
+	async refreshSnippets(): Promise<void> {
+		if (!this.snippetListEl) return;
+		this.snippetListEl.empty();
+		const entries = await listSnippets(this.app, this.plugin.settings.enabledSnippets);
+		if (entries.length === 0) {
+			this.snippetListEl.createEl('p', {
+				cls: 'np-snippet-empty',
+				text: 'No CSS snippets found in .obsidian/snippets/.',
+			});
+			return;
+		}
+		for (const entry of entries) {
+			this.renderSnippetRow(this.snippetListEl, entry);
+		}
+	}
+
+	private renderSnippetRow(parent: HTMLElement, entry: SnippetEntry): void {
+		const row = parent.createDiv({ cls: 'np-snippet-row' });
+		const nameEl = row.createSpan({ cls: 'np-snippet-name', text: entry.filename });
+		nameEl.title = entry.filename;
+
+		const toggle = row.createEl('div', { cls: 'np-snippet-toggle' });
+		const checkbox = toggle.createEl('input', {
+			attr: { type: 'checkbox', id: `np-snip-${entry.filename}` },
+		}) as HTMLInputElement;
+		checkbox.checked = entry.enabled;
+		checkbox.addEventListener('change', async () => {
+			const enabled = this.plugin.settings.enabledSnippets;
+			if (checkbox.checked) {
+				if (!enabled.includes(entry.filename)) enabled.push(entry.filename);
+			} else {
+				const idx = enabled.indexOf(entry.filename);
+				if (idx !== -1) enabled.splice(idx, 1);
+			}
+			await this.plugin.saveSettings();
+		});
+		const label = toggle.createEl('label', { attr: { for: `np-snip-${entry.filename}` } });
+		label.addClass('np-snippet-toggle-label');
 	}
 
 	display(): void {
@@ -220,6 +266,22 @@ export class PrintSettingTab extends PluginSettingTab {
 				'The plugin renders the note, shows a preview, then sends the HTML ' +
 				'directly to the companion app — no file permissions needed.',
 		});
+
+		// ── CSS Snippets ──────────────────────────────────────────────────────
+		containerEl.createEl('h3', { text: 'Print CSS snippets' });
+		containerEl.createEl('p', {
+			cls: 'np-snippet-desc',
+			text: 'Toggle snippets from .obsidian/snippets/ to inject into every print output. ' +
+				'These are the same files as Obsidian\'s Appearance → CSS snippets panel.',
+		});
+
+		const snippetHeader = containerEl.createDiv({ cls: 'np-snippet-header' });
+		const reloadBtn = snippetHeader.createEl('button', { cls: 'np-snippet-reload', text: '↻ Reload' });
+
+		this.snippetListEl = containerEl.createDiv({ cls: 'np-snippet-list' });
+		reloadBtn.addEventListener('click', () => void this.refreshSnippets());
+
+		void this.refreshSnippets();
 	}
 
 	private addMarginSetting(

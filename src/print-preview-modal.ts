@@ -178,10 +178,12 @@ export class PrintPreviewModal extends Modal {
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
 		btnRow.createEl('button', { text: 'Cancel' }).addEventListener('click', () => this.close());
 		btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' }).addEventListener('click', () => {
-			this.plugin.settings = { ...this.plugin.settings, ...this.local };
-			void this.plugin.saveSettings();
-			this.close();
-			this.onPrint(buildHelperUrl.wrapDocument(this.fragment, this.title, this.local));
+			void (async () => {
+				this.plugin.settings = { ...this.plugin.settings, ...this.local };
+				void this.plugin.saveSettings();
+				this.close();
+				this.onPrint(await buildHelperUrl.wrapDocument(this.fragment, this.title, this.local, this.plugin.app));
+			})();
 		});
 	}
 
@@ -256,7 +258,9 @@ export class PrintPreviewModal extends Modal {
 			this.onFrameLoaded(paperW, pageH, sh);
 		}, LAYOUT_TIMEOUT);
 
-		this.frame.srcdoc = buildHelperUrl.wrapDocument(this.fragment, this.title, this.local);
+		buildHelperUrl.wrapDocument(this.fragment, this.title, this.local, this.plugin.app)
+			.then(html => { if (this.frame) this.frame.srcdoc = html; })
+			.catch(() => { /* non-fatal — snippets unavailable */ });
 	}
 
 	private removeMsgHandler(): void {

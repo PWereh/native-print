@@ -49,7 +49,7 @@ gantt
 
     section v2.4 · Layout Engine
     Custom header / footer templates       :         le1, 2026-05-01, 2026-05-21
-    Inject custom CSS from vault root      :         le2, 2026-05-07, 2026-05-28
+    Inject print CSS from vault snippets   :done,    le2, 2026-04-08, 2026-04-11
 
     section v3.0 · Pandoc Engine
     Pandoc format / typeset / style toggle :         pe1, 2026-06-01, 2026-07-01
@@ -65,12 +65,13 @@ gantt
 | Android | Full page-size map (A3/A5/Tabloid) | High | ✅ 2.2.0 |
 | Android | Note filename as print job/PDF name | High | ✅ 2.2.0 |
 | Preview | Page-break algorithm (content in margins) | High | 🐛 #preview-pagebreak-001 |
+| Preview | Mermaid diagrams print as code blocks | High | 🐛 #mermaid-codeblock-001 |
 | Preview | Code-block text-wrap toggle | High | ✅ 2.3.0 |
 | Preview | Image inline embedding (base64) | High | ✅ 2.3.0 |
 | Preview | True-colour print output | Medium | ✅ 2.3.0 |
 
 | Layout | Custom header/footer per-template | Medium | Planned |
-| Layout | Custom CSS from `.css` at vault root | Medium | Planned |
+| Layout | Print CSS from vault snippets (.obsidian/snippets) | Medium | ✅ 2.4.0 |
 | Engine | Pandoc integration (format/typeset) | Low | Planned |
 | UX | Print from file-explorer context menu | Medium | Planned |
 
