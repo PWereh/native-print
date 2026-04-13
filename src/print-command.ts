@@ -4,8 +4,6 @@ import { renderNoteToHtml } from './renderer';
 import { buildHelperUrl } from './html-builder';
 import { PrintPreviewModal } from './print-preview-modal';
 
-// ── Command registration ──────────────────────────────────────────────────────
-
 export function registerPrintCommand(plugin: NativePrintPlugin): void {
 	plugin.addCommand({
 		id: 'print-current-note',
@@ -18,7 +16,6 @@ export function registerPrintCommand(plugin: NativePrintPlugin): void {
 			return true;
 		},
 	});
-
 	plugin.addCommand({
 		id: 'print-current-note-direct',
 		name: 'Print current note (skip preview)',
@@ -32,8 +29,6 @@ export function registerPrintCommand(plugin: NativePrintPlugin): void {
 	});
 }
 
-// ── Entry point ───────────────────────────────────────────────────────────────
-
 export function triggerPrint(plugin: NativePrintPlugin, skipPreview = false): void {
 	preparePrint(plugin, skipPreview).catch(err => {
 		new Notice(`Print failed: ${(err as Error).message}`);
@@ -41,23 +36,24 @@ export function triggerPrint(plugin: NativePrintPlugin, skipPreview = false): vo
 	});
 }
 
-// ── Core pipeline ─────────────────────────────────────────────────────────────
-
 async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Promise<void> {
 	const view = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (!view?.file) {
-		new Notice('No active note to print.');
-		return;
-	}
+	if (!view?.file) { new Notice('No active note to print.'); return; }
 
 	const notice = new Notice('Preparing print\u2026', 0);
-
 	let fragment: string;
 	try {
 		const markdown = await plugin.app.vault.read(view.file);
 		fragment = await renderNoteToHtml(
-			plugin.app, markdown, view.file.path, plugin,
-			plugin.settings.inlineImages
+			plugin.app,
+			markdown,
+			view.file.path,
+			plugin,
+			plugin.settings.inlineImages,
+			{
+				postProcessorWaitMs: plugin.settings.postProcessorWaitMs,
+				renderMermaid:       plugin.settings.renderMermaid,
+			}
 		);
 	} finally {
 		notice.hide();
@@ -72,17 +68,8 @@ async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Pr
 		return;
 	}
 
-	new PrintPreviewModal(
-		plugin.app,
-		fragment,
-		title,
-		settings,
-		getPrintExecutor(plugin, title),
-		plugin
-	).open();
+	new PrintPreviewModal(plugin.app, fragment, title, settings, getPrintExecutor(plugin, title), plugin).open();
 }
-
-// ── Platform executors ────────────────────────────────────────────────────────
 
 function getPrintExecutor(plugin: NativePrintPlugin, title: string) {
 	if (Platform.isAndroidApp) {
@@ -92,19 +79,9 @@ function getPrintExecutor(plugin: NativePrintPlugin, title: string) {
 }
 
 function sendToAndroidHelper(fullHtml: string, plugin: NativePrintPlugin, title: string): void {
-	// btoa() produces standard base64 (+, /, = padding).
-	// The APK decodes with Base64.URL_SAFE | Base64.NO_PADDING, which expects
-	// the URL-safe alphabet (- instead of +, _ instead of /, no = padding).
-	// Convert here so both ends agree.
 	const base64 = btoa(unescape(encodeURIComponent(fullHtml)))
-		.replace(/\+/g, '-')
-		.replace(/\//g, '_')
-		.replace(/=+$/, '');
-	if (base64.length > 900_000) {
-		new Notice('Note is very large \u2014 embedded images may be omitted.', 6000);
-	}
-	// Use anchor click, not window.open() — window.open() triggers the Capacitor
-	// full-screen browser on Android, hanging the UI.
+		.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+	if (base64.length > 900_000) new Notice('Note is very large \u2014 embedded images may be omitted.', 6000);
 	const a = document.createElement('a');
 	a.href = buildHelperUrl.toIntentUrl(base64, plugin.settings, title);
 	a.click();
