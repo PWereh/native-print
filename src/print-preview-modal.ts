@@ -1,4 +1,4 @@
-import { App, Modal } from 'obsidian';
+import { App, Modal, setIcon } from 'obsidian';
 import {
 	PrintPluginSettings, MARGIN_PRESETS, MarginPreset,
 	PageSize, Orientation, PAGE_DIMS_MM, PX_PER_MM,
@@ -176,6 +176,24 @@ export class PrintPreviewModal extends Modal {
 		this.addCircleToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, v => { this.local.includeYamlFrontmatter = v; this.scheduleRerender(); });
 
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
+
+		// ── Settings cog — far left ───────────────────────────────────────────
+		const cogBtn = btnRow.createEl('button', { cls: 'np-settings-cog-btn' });
+		setIcon(cogBtn, 'settings');
+		cogBtn.title = 'Plugin settings';
+		cogBtn.addEventListener('click', () => {
+			this.close();
+			// Open Obsidian settings on the Native Print tab
+			const appSettings = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
+			if (appSettings) {
+				appSettings.open();
+				appSettings.openTabById(this.plugin.manifest.id);
+			}
+		});
+
+		// Spacer — pushes cancel/print to the right
+		btnRow.createDiv({ cls: 'np-btn-spacer' });
+
 		btnRow.createEl('button', { text: 'Cancel' }).addEventListener('click', () => this.close());
 		btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' }).addEventListener('click', () => {
 			void (async () => {
