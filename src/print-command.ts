@@ -57,7 +57,15 @@ async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Pr
 		const markdown = await plugin.app.vault.read(view.file);
 		fragment = await renderNoteToHtml(
 			plugin.app, markdown, view.file.path, plugin,
-			plugin.settings.inlineImages
+			{
+				inlineImages:    plugin.settings.inlineImages,
+				renderMermaid:   plugin.settings.renderMermaid,
+				imageGrayscale:  plugin.settings.imageGrayscale,
+				imageInvert:     plugin.settings.imageInvert,
+				imageBrightness: plugin.settings.imageBrightness,
+				imageContrast:   plugin.settings.imageContrast,
+				imageSaturate:   plugin.settings.imageSaturate,
+			}
 		);
 	} finally {
 		notice.hide();

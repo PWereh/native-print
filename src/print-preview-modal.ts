@@ -176,8 +176,36 @@ export class PrintPreviewModal extends Modal {
 		this.addCircleToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, v => { this.local.includeYamlFrontmatter = v; this.scheduleRerender(); });
 
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
-		btnRow.createEl('button', { text: 'Cancel' }).addEventListener('click', () => this.close());
-		btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' }).addEventListener('click', () => {
+
+		// Left: settings cog — opens the plugin's deep settings tab
+		const cogBtn = btnRow.createEl('button', { cls: 'np-settings-cog', attr: { title: 'Print settings' } });
+		cogBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+			stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+			width="18" height="18">
+			<circle cx="12" cy="12" r="3"/>
+			<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06
+				a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09
+				A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83
+				l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09
+				A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83
+				l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09
+				a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83
+				l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09
+				a1.65 1.65 0 0 0-1.51 1z"/>
+		</svg>`;
+		cogBtn.addEventListener('click', () => {
+			this.close();
+			// Open Obsidian's settings, then navigate to this plugin's tab.
+			(this.app as unknown as { setting: { open(): void; openTabById(id: string): void } })
+				.setting.open();
+			(this.app as unknown as { setting: { openTabById(id: string): void } })
+				.setting.openTabById('native-print');
+		});
+
+		// Right: Cancel + Print
+		const actionGroup = btnRow.createDiv({ cls: 'np-btn-actions' });
+		actionGroup.createEl('button', { text: 'Cancel' }).addEventListener('click', () => this.close());
+		actionGroup.createEl('button', { cls: 'mod-cta', text: '🖨  Print' }).addEventListener('click', () => {
 			void (async () => {
 				this.plugin.settings = { ...this.plugin.settings, ...this.local };
 				void this.plugin.saveSettings();
