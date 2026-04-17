@@ -6,6 +6,7 @@ export type PageSize        = 'A3' | 'A4' | 'A5' | 'Letter' | 'Legal' | 'Tabloid
 export type MarginPreset    = 'normal' | 'narrow' | 'wide' | 'custom';
 export type Orientation     = 'portrait' | 'landscape';
 export type ImageFilter     = 'none' | 'grayscale' | 'sepia' | 'bw';
+export type ImageScaleMode  = 'natural' | 'fill' | 'contain';
 
 export const PX_PER_MM = 96 / 25.4;
 
@@ -45,7 +46,9 @@ export interface PrintPluginSettings {
 	imageDropShadow:    boolean;
 	imageBorderRadius:  number;
 	stripImages:        boolean;
-	enabledSnippets: string[];
+	imageScaleMode:     ImageScaleMode;
+	enabledCssPresets:  string[];
+	enabledSnippets:    string[];
 }
 
 export const MARGIN_PRESETS: Record<MarginPreset, { top: number; bottom: number; left: number; right: number }> = {
@@ -91,8 +94,53 @@ export const DEFAULT_SETTINGS: PrintPluginSettings = {
 	imageDropShadow:    false,
 	imageBorderRadius:  0,
 	stripImages:        false,
-	enabledSnippets: [],
+	imageScaleMode:     'natural',
+	enabledCssPresets:  [],
+	enabledSnippets:    [],
 };
+
+// ─── Built-in CSS Presets ────────────────────────────────────────────────────
+export interface CssPreset {
+	name:  string;
+	desc:  string;
+	css:   string;
+}
+
+export const CSS_PRESETS: Record<string, CssPreset> = {
+	'mermaid-zoom': {
+		name: 'Mermaid zoom',
+		desc: 'Responsive Mermaid diagrams with resize handle.',
+		css: `svg[id^="m"][width][height][viewBox]{max-width:95%;max-height:95%;}
+div.mermaid{margin-left:0!important;text-align:center;resize:both;overflow:auto;margin-bottom:2px;position:relative;max-height:600px;max-width:100%;}
+div.mermaid::after{content:'';display:block;width:10px;height:10px;background-color:yellowgreen;position:absolute;right:0;bottom:0;}`,
+	},
+	'callout-borders': {
+		name: 'Callout left-border only',
+		desc: 'Strips callout background fill; shows left border accent only.',
+		css: `.callout{background:transparent!important;border:none!important;border-left:4px solid var(--callout-color,#086DDD)!important;border-radius:0!important;padding:6px 12px!important;}`,
+	},
+	'code-print': {
+		name: 'Code block print polish',
+		desc: 'Softer code background, tighter padding, monospace at 9pt.',
+		css: `pre,code{font-size:9pt!important;background:#f4f4f4!important;border:1px solid #ddd!important;border-radius:3px!important;}pre{padding:8px 10px!important;}`,
+	},
+	'table-zebra': {
+		name: 'Zebra-stripe tables',
+		desc: 'Alternating row shading for readability.',
+		css: `tbody tr:nth-child(even){background:rgba(0,0,0,0.04)!important;}`,
+	},
+	'hide-links': {
+		name: 'Hide hyperlink underlines',
+		desc: 'Remove underlines from links for a cleaner printed page.',
+		css: `a{text-decoration:none!important;}`,
+	},
+	'compact': {
+		name: 'Compact spacing',
+		desc: 'Tighter line-height and margins for dense notes.',
+		css: `body{line-height:1.4!important;}p,li{margin:0.2em 0!important;}h1,h2,h3{margin:0.5em 0 0.25em!important;}`,
+	},
+};
+
 
 export class PrintSettingTab extends PluginSettingTab {
 	plugin: NativePrintPlugin;
@@ -322,6 +370,17 @@ export class PrintSettingTab extends PluginSettingTab {
 			.addToggle(t => t.setValue(this.plugin.settings.imageDropShadow)
 				.onChange(async v => { this.plugin.settings.imageDropShadow = v; await this.plugin.saveSettings(); }));
 
+		el.createEl('h3', { text: 'Image scaling' });
+		new Setting(el)
+			.setName('Scale mode')
+			.setDesc('Natural: honour Obsidian "|width" attribute. Fill: stretch to content column. Contain: cap at 100%.')
+			.addDropdown(d => d
+				.addOption('natural', 'Natural (|width attr)')
+				.addOption('fill',    'Fill column')
+				.addOption('contain', 'Contain (100% max)')
+				.setValue(this.plugin.settings.imageScaleMode)
+				.onChange(async v => { this.plugin.settings.imageScaleMode = v as ImageScaleMode; await this.plugin.saveSettings(); }));
+
 		el.createEl('h3', { text: 'Strip images' });
 		new Setting(el)
 			.setName('Remove all images')
@@ -331,7 +390,36 @@ export class PrintSettingTab extends PluginSettingTab {
 	}
 
 	private buildSnippetsPane(el: HTMLElement): void {
-		el.createEl('h3', { text: 'Print CSS snippets' });
+		// ── Master "Apply CSS styles" accordion ──────────────────────────────
+		el.createEl('h3', { text: 'CSS presets' });
+		el.createEl('p', { cls: 'np-setting-desc', text: 'Built-in style presets injected into every print output.' });
+
+		const presetsDetails = el.createEl('details', { cls: 'np-presets-accordion' });
+		const presetsSummary = presetsDetails.createEl('summary', { cls: 'np-presets-summary' });
+		const masterEnabled  = this.plugin.settings.enabledCssPresets.length > 0;
+		presetsSummary.createSpan({ cls: 'np-presets-label', text: 'Apply CSS styles' });
+		const masterBadge = presetsSummary.createSpan({ cls: 'np-presets-badge', text: masterEnabled ? `${this.plugin.settings.enabledCssPresets.length} active` : 'none' });
+
+		const presetsBody = presetsDetails.createDiv({ cls: 'np-presets-body' });
+		for (const [key, preset] of Object.entries(CSS_PRESETS)) {
+			const row = presetsBody.createDiv({ cls: 'np-preset-row' });
+			const info = row.createDiv({ cls: 'np-preset-info' });
+			info.createSpan({ cls: 'np-preset-name', text: preset.name });
+			info.createSpan({ cls: 'np-preset-desc', text: preset.desc });
+			const cb = row.createEl('input', { attr: { type: 'checkbox', id: `np-preset-${key}` } }) as HTMLInputElement;
+			cb.checked = this.plugin.settings.enabledCssPresets.includes(key);
+			const lbl = row.createEl('label', { attr: { for: `np-preset-${key}` }, cls: 'np-preset-toggle-label' });
+			cb.addEventListener('change', async () => {
+				const list = this.plugin.settings.enabledCssPresets;
+				if (cb.checked) { if (!list.includes(key)) list.push(key); }
+				else { const i = list.indexOf(key); if (i !== -1) list.splice(i, 1); }
+				masterBadge.textContent = list.length > 0 ? `${list.length} active` : 'none';
+				await this.plugin.saveSettings();
+			});
+		}
+
+		// ── Vault snippets ────────────────────────────────────────────────────
+		el.createEl('h3', { text: 'Vault CSS snippets' });
 		el.createEl('p', { cls: 'np-setting-desc', text: 'Toggle snippets from .obsidian/snippets/ to inject into every print output.' });
 		const header    = el.createDiv({ cls: 'np-snippet-header' });
 		const reloadBtn = header.createEl('button', { cls: 'np-snippet-reload', text: '↻ Reload' });

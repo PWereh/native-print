@@ -61,6 +61,16 @@ async function wrapDocument(
 		? await loadEnabledSnippetsCss(app, s.enabledSnippets)
 		: '';
 
+	// CSS presets: inline built-in preset CSS for enabled entries
+	let presetCss = '';
+	if (s.enabledCssPresets?.length) {
+		const { CSS_PRESETS } = await import('./settings');
+		presetCss = s.enabledCssPresets
+			.map(k => CSS_PRESETS[k]?.css ?? '')
+			.filter(Boolean)
+			.join('\n');
+	}
+
 	const renderingCss  = buildRenderingCss(s);
 	const imageCss      = generateImageCss(s);
 
@@ -94,6 +104,7 @@ async function wrapDocument(
     ${s.includeYamlFrontmatter ? '' : '.frontmatter, .frontmatter-container { display: none !important; }'}
     ${renderingCss ? `/* ── Rendering ── */\n${renderingCss}` : ''}
     ${imageCss ? `/* ── Images ── */\n${imageCss}` : ''}
+    ${presetCss  ? `/* ── CSS Presets ── */\n${presetCss}` : ''}
     ${snippetCss ? `/* ── Print CSS Snippets ── */\n${snippetCss}` : ''}
     ${previewOverlayCss(s)}
   </style>

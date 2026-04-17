@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.6.0] — 2026-04-17
+
+### Fixed
+- **Nude settings cog** — `.np-settings-cog-btn` now `background:transparent; border:none`. Icon-only, `color:rgba(255,255,255,0.45)`, rotates 25° on hover.
+- **Button-row layout quirks** — single authoritative CSS block: cog far-left, `np-btn-spacer` flex-fills, `np-btn-actions` flush-right. Removed all `!important` overrides from the v2.5.0 patch block. Mobile wraps cleanly.
+- **Colour / Wrap toggles restored** — `trueColour` and `codeWrap` circle toggles re-added to the preview toolbar.
+
+### Added
+- **Theme-aware callouts** — `getCalloutCss()` reads live `--callout-{type}` CSS vars from `getComputedStyle(document.body)` and emits `rgba(r,g,b,0.08)` bg + matching border and title colour. Falls back to Obsidian default palette.
+- **Image scale mode** (`natural` | `fill` | `contain`) — new setting in the Images tab. `natural` honours `|width` attr; `fill` forces column-width; `contain` caps at 100%.
+- **CSS preset accordion** — Snippets tab: collapsible `<details>` "Apply CSS styles" with six built-in presets (Mermaid zoom, Callout border-only, Code polish, Zebra tables, Hide link underlines, Compact). Active count shown in badge. Injected in `wrapDocument()` before vault snippets.
+- **`enabledCssPresets: string[]`** added to `PrintPluginSettings` and defaults.
+- **`ImageScaleMode` type** exported from `settings.ts`.
+
 ## [2.4.0] — 2026-04-11
 
 ### Added

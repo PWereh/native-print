@@ -174,35 +174,36 @@ export class PrintPreviewModal extends Modal {
 		});
 		this.addCircleToggle(toolbar, 'Title',    this.local.includeTitle,           v => { this.local.includeTitle = v;            this.scheduleRerender(); });
 		this.addCircleToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, v => { this.local.includeYamlFrontmatter = v; this.scheduleRerender(); });
+		this.addCircleToggle(toolbar, 'Wrap',     this.local.codeWrap,               v => { this.local.codeWrap = v;                this.scheduleRerender(); });
+		this.addCircleToggle(toolbar, 'Colour',   this.local.trueColour,             v => { this.local.trueColour = v;              this.scheduleRerender(); });
 
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
 
-		// ── Settings cog — far left ───────────────────────────────────────────
-		const cogBtn = btnRow.createEl('button', { cls: 'np-settings-cog-btn' });
+		// Far left — nude cog (no background/border, icon-only)
+		const cogBtn = btnRow.createEl('button', { cls: 'np-settings-cog-btn', attr: { title: 'Plugin settings' } });
 		setIcon(cogBtn, 'settings');
-		cogBtn.title = 'Plugin settings';
 		cogBtn.addEventListener('click', () => {
 			this.close();
-			// Open Obsidian settings on the Native Print tab
-			const appSettings = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
-			if (appSettings) {
-				appSettings.open();
-				appSettings.openTabById(this.plugin.manifest.id);
-			}
+			const s = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
+			if (s) { s.open(); s.openTabById(this.plugin.manifest.id); }
 		});
 
-		// Spacer — pushes cancel/print to the right
+		// Flex spacer
 		btnRow.createDiv({ cls: 'np-btn-spacer' });
 
-		btnRow.createEl('button', { text: 'Cancel' }).addEventListener('click', () => this.close());
-		btnRow.createEl('button', { cls: 'mod-cta', text: '🖨  Print' }).addEventListener('click', () => {
-			void (async () => {
-				this.plugin.settings = { ...this.plugin.settings, ...this.local };
-				void this.plugin.saveSettings();
-				this.close();
-				this.onPrint(await buildHelperUrl.wrapDocument(this.fragment, this.title, this.local, this.plugin.app));
-			})();
-		});
+		// Right — Cancel | Print
+		const actionGroup = btnRow.createDiv({ cls: 'np-btn-actions' });
+		actionGroup.createEl('button', { text: 'Cancel' })
+			.addEventListener('click', () => this.close());
+		actionGroup.createEl('button', { cls: 'mod-cta', text: '🖨  Print' })
+			.addEventListener('click', () => {
+				void (async () => {
+					this.plugin.settings = { ...this.plugin.settings, ...this.local };
+					void this.plugin.saveSettings();
+					this.close();
+					this.onPrint(await buildHelperUrl.wrapDocument(this.fragment, this.title, this.local, this.plugin.app));
+				})();
+			});
 	}
 
 	onClose(): void {

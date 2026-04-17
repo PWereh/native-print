@@ -77,15 +77,59 @@ export function processHtmlBlocks(container: HTMLElement): void {
  * Renders callouts with type-specific accent colours matching Obsidian's palette.
  * Must be included in every print output when renderCallouts is enabled.
  */
+/**
+ * Reads the active Obsidian theme's callout CSS variables from the live document
+ * and emits a <style> block that mirrors those colours faithfully in print.
+ *
+ * Falls back to the default Obsidian palette when a variable is unset (e.g.
+ * when rendering in a headless/test context).
+ */
 export function getCalloutCss(): string {
+	// Read live theme vars from document.body
+	const cs = (typeof document !== 'undefined')
+		? getComputedStyle(document.body)
+		: null;
+
+	const v = (varName: string, fallback: string): string => {
+		if (!cs) return fallback;
+		const val = cs.getPropertyValue(varName).trim();
+		return val || fallback;
+	};
+
+	// Callout type → CSS variable → hex fallback
+	// Obsidian stores callout colours as --callout-{type} = r,g,b tuples
+	const palette: Array<[string[], string, string]> = [
+		[['note','info'],                         v('--callout-info',    '8,109,221'),  '#086DDD'],
+		[['tip','hint'],                           v('--callout-tip',     '45,183,181'), '#2db7b5'],
+		[['important','abstract','summary','tldr'],v('--callout-abstract','83,223,221'), '#53DFDD'],
+		[['success','check','done'],               v('--callout-success', '12,181,79'),  '#0cb54f'],
+		[['question','help','faq'],                v('--callout-question','189,142,55'), '#BD8E37'],
+		[['warning','caution','attention'],        v('--callout-warning', '217,108,0'),  '#d96c00'],
+		[['danger','error','failure','fail','missing','bug'],
+		                                           v('--callout-error',   '228,55,75'),  '#E4374B'],
+		[['example'],                              v('--callout-example', '168,130,255'),'#a882ff'],
+		[['quote','cite'],                         v('--callout-quote',   '158,158,158'),'#9e9e9e'],
+	];
+
+	// Build per-type rules using the live RGB value (for bg alpha) and hex (for border)
+	const typeRules = palette.map(([types, rgb, hex]) => {
+		const selectors = types.map(t => `.callout[data-callout="${t}"]`).join(',\n');
+		return `${selectors} {
+	background: rgba(${rgb}, 0.08);
+	border-left-color: ${hex};
+	--callout-color: ${hex};
+}`;
+	}).join('\n');
+
 	return `
-/* ── Callouts / Admonitions ── */
+/* ── Callouts / Admonitions — theme-aware ── */
 .callout {
 	border-radius: 5px;
 	padding: 10px 14px;
 	margin: 0.85em 0;
 	page-break-inside: avoid;
 	position: relative;
+	border-left: 4px solid var(--callout-color, #086DDD);
 }
 .callout-title {
 	display: flex;
@@ -94,63 +138,19 @@ export function getCalloutCss(): string {
 	font-weight: 700;
 	margin-bottom: 6px;
 	font-size: 0.95em;
+	color: var(--callout-color, #086DDD);
 }
-.callout-icon svg { width: 16px; height: 16px; flex-shrink: 0; }
+.callout-icon svg { width: 16px; height: 16px; flex-shrink: 0; fill: currentColor; }
 .callout-fold { display: none; }
 .callout-content > :first-child { margin-top: 0; }
 .callout-content > :last-child  { margin-bottom: 0; }
-
-/* Colour palette — mirrors Obsidian's default callout colours */
-.callout[data-callout="note"],
-.callout[data-callout="info"] {
-	background: rgba(8,109,221,0.07); border-left: 4px solid #086DDD;
-}
-.callout[data-callout="tip"],
-.callout[data-callout="hint"] {
-	background: rgba(45,183,181,0.07); border-left: 4px solid #2db7b5;
-}
-.callout[data-callout="important"],
-.callout[data-callout="abstract"],
-.callout[data-callout="summary"],
-.callout[data-callout="tldr"] {
-	background: rgba(83,223,221,0.07); border-left: 4px solid #53DFDD;
-}
-.callout[data-callout="success"],
-.callout[data-callout="check"],
-.callout[data-callout="done"] {
-	background: rgba(12,181,79,0.07); border-left: 4px solid #0cb54f;
-}
-.callout[data-callout="question"],
-.callout[data-callout="help"],
-.callout[data-callout="faq"] {
-	background: rgba(189,142,55,0.07); border-left: 4px solid #BD8E37;
-}
-.callout[data-callout="warning"],
-.callout[data-callout="caution"],
-.callout[data-callout="attention"] {
-	background: rgba(217,108,0,0.08); border-left: 4px solid #d96c00;
-}
-.callout[data-callout="danger"],
-.callout[data-callout="error"],
-.callout[data-callout="failure"],
-.callout[data-callout="fail"],
-.callout[data-callout="missing"],
-.callout[data-callout="bug"] {
-	background: rgba(228,55,75,0.07); border-left: 4px solid #E4374B;
-}
-.callout[data-callout="example"] {
-	background: rgba(168,130,255,0.07); border-left: 4px solid #a882ff;
-}
-.callout[data-callout="quote"],
-.callout[data-callout="cite"] {
-	background: rgba(158,158,158,0.07); border-left: 4px solid #9e9e9e;
-}
-/* Default fallback for unknown callout types */
+/* Default */
 .callout:not([data-callout]) {
-	background: rgba(8,109,221,0.07); border-left: 4px solid #086DDD;
+	background: rgba(8,109,221,0.08); border-left-color: #086DDD; --callout-color: #086DDD;
 }
-`;
-}
+${typeRules}
+`; // end return
+} // end getCalloutCss
 
 /**
  * CSS for Mermaid diagrams and other rendered diagram blocks.
