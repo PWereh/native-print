@@ -5,78 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [2.5.0] — 2026-04-14
+## [2.6.0] — 2026-04-17
+
+### Fixed
+- **Nude settings cog** — `.np-settings-cog-btn` now `background:transparent; border:none`. Icon-only, `color:rgba(255,255,255,0.45)`, rotates 25° on hover.
+- **Button-row layout quirks** — single authoritative CSS block: cog far-left, `np-btn-spacer` flex-fills, `np-btn-actions` flush-right. Removed all `!important` overrides from the v2.5.0 patch block. Mobile wraps cleanly.
+- **Colour / Wrap toggles restored** — `trueColour` and `codeWrap` circle toggles re-added to the preview toolbar.
 
 ### Added
-
-#### Mermaid & post-processor diagram rendering (`renderMermaid`)
-New setting and **Render** tab toggle (default **on**).
-
-Root cause fix for `#mermaid-codeblock-001`: `MarkdownRenderer.render()` was called
-on a detached `<div>` — Obsidian post-processors (including the Mermaid plugin)
-silently abort on detached DOM nodes. The renderer now attaches the container to
-`document.body` at `left: -9999px` before rendering, waits for all `.mermaid`
-containers to acquire an `<svg>` child (polling every 80 ms, 4 s timeout), then:
-
-1. Serializes each SVG via `XMLSerializer.serializeToString()`
-2. URI-encodes and wraps as `data:image/svg+xml;charset=utf-8,…`
-3. Replaces the `.mermaid` div with a sized `<img>` — portable across srcdoc and APK
-
-Same wait mechanism covers callouts, admonitions, and any other async
-post-processor (DataView preview, Excalidraw thumbnails).
-
-#### Callouts & admonitions rendering toggle (`renderCallouts`)
-New toggle in **Render** tab. When enabled, the renderer wait ensures
-`> [!note]`, `> [!warning]`, `> [!tip]` callout blocks are fully styled
-before capture, preserving their icons, colours, and collapsible state.
-
-#### Image manipulation — cutting-edge CSS filter controls (**Image** tab)
-Five independent per-image CSS filter controls applied at render time:
-
-| Control      | Range   | Default | CSS function      |
-|--------------|---------|---------|-------------------|
-| Grayscale    | toggle  | off     | `grayscale(100%)` |
-| Invert       | toggle  | off     | `invert(100%)`    |
-| Brightness   | 0–200 % | 100     | `brightness(n%)`  |
-| Contrast     | 0–200 % | 100     | `contrast(n%)`    |
-| Saturation   | 0–200 % | 100     | `saturate(n%)`    |
-
-Combined into a single `style.filter` string per `<img>`. Filters are applied
-during `inlineVaultImages()` so they survive the base64 transfer to Android.
-Reset button restores all five to defaults without reloading.
-
-#### Settings cog button in print preview (`⚙`)
-A 40 px circle pill button with the Feather/Material cog SVG sits at the
-**extreme bottom-left** of the preview button row — same row as Cancel / Print.
-Click closes the preview and opens Obsidian Settings navigated directly to the
-Native Print tab via `app.setting.openTabById('native-print')`.
-Active state applies a 30° CSS rotation for tactile affordance.
-
-#### Tabbed deep-settings UI (four tabs)
-The settings tab is refactored into four horizontal tabs:
-
-| Tab       | Contents                                                     |
-|-----------|--------------------------------------------------------------|
-| **General**  | Print management, page, margins, typography, content, output quality, Android info |
-| **Render**   | Mermaid, callouts, inline images, post-processor notes       |
-| **Image**    | Grayscale, invert, brightness, contrast, saturation, reset   |
-| **Snippets** | CSS snippet toggle list, reload button                       |
-
-Tab state is retained within the session. Tabs use `border-bottom: 2px solid
---interactive-accent` for the active indicator and restore from `activeTab` field.
-
-### Changed
-- `renderer.ts`: `renderNoteToHtml()` now accepts `Partial<RenderOptions>` object
-  (replaces bare `inlineImages: boolean`). Host div attached to live DOM, removed
-  after render. `waitForMermaid()` + `serializeMermaidSvgs()` added. Copy-code
-  buttons and `.edit-block-button` stripped before returning HTML.
-- `print-command.ts`: passes full `RenderOptions` from plugin settings.
-- `styles.css`: `.native-print-btn-row` refactored to `justify-content: space-between`
-  with `.np-settings-cog` (left) and `.np-btn-actions` (right). Tab bar styles added.
-
-### Issues resolved
-- `#mermaid-codeblock-001` — **Mermaid diagrams print as code blocks**: fixed by
-  attaching renderer to live DOM and polling for post-processor completion.
+- **Theme-aware callouts** — `getCalloutCss()` reads live `--callout-{type}` CSS vars from `getComputedStyle(document.body)` and emits `rgba(r,g,b,0.08)` bg + matching border and title colour. Falls back to Obsidian default palette.
+- **Image scale mode** (`natural` | `fill` | `contain`) — new setting in the Images tab. `natural` honours `|width` attr; `fill` forces column-width; `contain` caps at 100%.
+- **CSS preset accordion** — Snippets tab: collapsible `<details>` "Apply CSS styles" with six built-in presets (Mermaid zoom, Callout border-only, Code polish, Zebra tables, Hide link underlines, Compact). Active count shown in badge. Injected in `wrapDocument()` before vault snippets.
+- **`enabledCssPresets: string[]`** added to `PrintPluginSettings` and defaults.
+- **`ImageScaleMode` type** exported from `settings.ts`.
 
 ## [2.4.0] — 2026-04-11
 

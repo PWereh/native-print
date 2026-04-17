@@ -1,6 +1,8 @@
 import { App } from 'obsidian';
 import { PrintPluginSettings, PAGE_DIMS_MM, PX_PER_MM } from './settings';
 import { loadEnabledSnippetsCss } from './snippet-loader';
+import { buildRenderingCss } from './render-pipeline';
+import { generateImageCss } from './image-processor';
 
 function escapeHtml(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -27,11 +29,7 @@ function previewOverlayCss(s: PrintPluginSettings): string {
         overflow-x:  hidden    !important;
         max-width:   100%      !important;
       }
-      table {
-        table-layout: fixed  !important;
-        width:        100%   !important;
-        overflow:     hidden !important;
-      }
+      table { table-layout: fixed !important; width: 100% !important; overflow: hidden !important; }
       td, th { overflow: hidden !important; word-break: break-word !important; }
       img    { max-width: 100% !important; height: auto !important; }
     }`;
@@ -39,38 +37,42 @@ function previewOverlayCss(s: PrintPluginSettings): string {
 
 /**
  * Assembles a complete, self-contained print-ready HTML document.
- *
- * @param app   - Obsidian App instance; required to resolve CSS snippet files.
- *                Pass undefined only in contexts where snippets are not needed.
- * @param bodyHtml - Pre-rendered HTML fragment from the Markdown renderer.
- * @param title    - Note basename (used as <title> and optional h1 heading).
- * @param s        - Current plugin settings.
+ * Includes: rendering CSS (callouts, mermaid, tasks), image CSS, and enabled snippets.
  */
 async function wrapDocument(
 	bodyHtml: string,
-	title: string,
-	s: PrintPluginSettings,
-	app?: App
+	title:    string,
+	s:        PrintPluginSettings,
+	app?:     App
 ): Promise<string> {
 	const titleHeading = s.includeTitle
 		? `<h1 class="np-doc-title">${escapeHtml(title)}</h1>\n`
 		: '';
 
-	// True-colour: off → force #000 for printer economy; on → preserve note colours.
 	const colourRules = s.trueColour
 		? ''
-		: `body { color: #000; background: #fff; }
-    a    { color: #000; }`;
+		: `body { color: #000; background: #fff; }\n    a { color: #000; }`;
 
-	// Code-wrap: on → pre-wrap (long lines wrap); off → overflow-x:auto.
 	const codeWrapRule = s.codeWrap
 		? `pre, code { white-space: pre-wrap !important; word-break: break-all !important; }`
 		: `pre { overflow-x: auto; }`;
 
-	// CSS snippets: read enabled files from .obsidian/snippets/
-	const snippetCss = (app && s.enabledSnippets?.length)
+	const snippetCss    = (app && s.enabledSnippets?.length)
 		? await loadEnabledSnippetsCss(app, s.enabledSnippets)
 		: '';
+
+	// CSS presets: inline built-in preset CSS for enabled entries
+	let presetCss = '';
+	if (s.enabledCssPresets?.length) {
+		const { CSS_PRESETS } = await import('./settings');
+		presetCss = s.enabledCssPresets
+			.map(k => CSS_PRESETS[k]?.css ?? '')
+			.filter(Boolean)
+			.join('\n');
+	}
+
+	const renderingCss  = buildRenderingCss(s);
+	const imageCss      = generateImageCss(s);
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -83,12 +85,7 @@ async function wrapDocument(
       margin: ${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm;
     }
     *, *::before, *::after { box-sizing: border-box; }
-    body {
-      font-family: ${s.fontFamily};
-      font-size:   ${s.fontSize}pt;
-      line-height: 1.6;
-      margin:      0;
-    }
+    body { font-family: ${s.fontFamily}; font-size: ${s.fontSize}pt; line-height: 1.6; margin: 0; }
     ${colourRules}
     .np-doc-title { margin: 0 0 0.75em; font-size: 1.6em; border-bottom: 1px solid #ccc; padding-bottom: 0.25em; }
     h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
@@ -105,6 +102,9 @@ async function wrapDocument(
     blockquote { border-left: 3px solid #999; margin: 0; padding-left: 16px; }
     hr { border: none; border-top: 1px solid #ccc; margin: 1em 0; }
     ${s.includeYamlFrontmatter ? '' : '.frontmatter, .frontmatter-container { display: none !important; }'}
+    ${renderingCss ? `/* ── Rendering ── */\n${renderingCss}` : ''}
+    ${imageCss ? `/* ── Images ── */\n${imageCss}` : ''}
+    ${presetCss  ? `/* ── CSS Presets ── */\n${presetCss}` : ''}
     ${snippetCss ? `/* ── Print CSS Snippets ── */\n${snippetCss}` : ''}
     ${previewOverlayCss(s)}
   </style>
@@ -115,9 +115,9 @@ async function wrapDocument(
 
 function toIntentUrl(base64Html: string, s: PrintPluginSettings, docTitle = 'Document'): string {
 	const settings = JSON.stringify({
-		pageSize:     s.pageSize,     orientation:   s.orientation,
-		marginTop:    s.marginTop,    marginBottom:  s.marginBottom,
-		marginLeft:   s.marginLeft,   marginRight:   s.marginRight,
+		pageSize:    s.pageSize,    orientation:  s.orientation,
+		marginTop:   s.marginTop,   marginBottom: s.marginBottom,
+		marginLeft:  s.marginLeft,  marginRight:  s.marginRight,
 		docTitle,
 	});
 	return (

@@ -389,15 +389,27 @@
 }
 
 /* ── Button row ─────────────────────────────────────────────────── */
+/* Layout: [cog] ──────────────── [Cancel] [🖨 Print]               */
 .native-print-btn-row {
-	display:         flex;
-	justify-content: flex-end;
-	align-items:     center;
-	gap:             10px;
-	padding:         10px 14px 14px;
-	flex-shrink:     0;
+	display:     flex;
+	align-items: center;
+	gap:         10px;
+	padding:     10px 14px 14px;
+	flex-shrink: 0;
 }
-.native-print-btn-row button {
+
+/* Spacer between cog and action group */
+.np-btn-spacer {
+	flex: 1 1 auto;
+}
+
+/* Action group — Cancel + Print flush right */
+.np-btn-actions {
+	display:     flex;
+	align-items: center;
+	gap:         10px;
+}
+.np-btn-actions button {
 	min-height:    40px;
 	min-width:     90px;
 	border-radius: 12px;
@@ -409,35 +421,54 @@
 	transition:    opacity 0.14s, box-shadow 0.14s;
 	-webkit-tap-highlight-color: transparent;
 }
-.native-print-btn-row button:active { opacity: 0.72; }
+.np-btn-actions button:active { opacity: 0.72; }
 
 /* Cancel */
-.native-print-btn-row button:not(.mod-cta) {
+.np-btn-actions button:not(.mod-cta) {
 	background: rgba(255, 255, 255, 0.10);
 	color:      rgba(255, 255, 255, 0.78);
 	border:     1px solid rgba(255, 255, 255, 0.13);
 }
-.native-print-btn-row button:not(.mod-cta):hover {
+.np-btn-actions button:not(.mod-cta):hover {
 	background: rgba(255, 255, 255, 0.17);
 }
 
 /* Print CTA */
-.native-print-btn-row .mod-cta {
+.np-btn-actions .mod-cta {
 	background: linear-gradient(135deg, #2979ff 0%, #1451b8 100%);
 	color:      #fff;
 	box-shadow: 0 2px 14px rgba(41, 121, 255, 0.40);
 }
-.native-print-btn-row .mod-cta:hover {
+.np-btn-actions .mod-cta:hover {
 	box-shadow: 0 4px 20px rgba(41, 121, 255, 0.56);
 }
 
-/* ── Mobile (<480px) — stack buttons full-width ──────────────────── */
+/* ── Nude cog — no background, no border, icon-only ── */
+.np-settings-cog-btn {
+	width:          36px;
+	height:         36px;
+	min-width:      36px;
+	padding:        0;
+	border:         none;
+	background:     transparent;
+	color:          rgba(255, 255, 255, 0.45);
+	display:        flex;
+	align-items:    center;
+	justify-content: center;
+	cursor:         pointer;
+	flex-shrink:    0;
+	transition:     color 0.15s, transform 0.22s;
+	-webkit-tap-highlight-color: transparent;
+}
+.np-settings-cog-btn:hover  { color: rgba(255, 255, 255, 0.85); transform: rotate(25deg); }
+.np-settings-cog-btn:active { color: rgba(255, 255, 255, 0.60); transform: rotate(50deg); }
+.np-settings-cog-btn svg    { width: 18px; height: 18px; }
+
+/* ── Mobile (<480px) ── */
 @media (max-width: 480px) {
-	.native-print-btn-row {
-		flex-direction: column-reverse;
-		gap: 8px;
-	}
-	.native-print-btn-row button { width: 100%; }
+	.native-print-btn-row { flex-wrap: wrap; gap: 8px; }
+	.np-btn-spacer         { display: none; }
+	.np-btn-actions        { width: 100%; justify-content: flex-end; }
 }
 
 /* ── Custom Margin sub-modal blur ───────────────────────────────── */
@@ -668,70 +699,139 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SETTINGS — TAB BAR
+   SETTINGS — tabbed layout (v2.5.0)
    ═══════════════════════════════════════════════════════════════ */
-.np-tab-bar {
-	display:        flex;
-	gap:            2px;
-	border-bottom:  2px solid var(--background-modifier-border);
-	margin-bottom:  16px;
-	padding-bottom: 0;
+
+.np-settings-tab-bar {
+	display:      flex;
+	gap:          4px;
+	padding:      4px 0 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 12px;
+	flex-wrap:    wrap;
 }
-.np-tab-btn {
-	padding:       7px 16px;
-	border:        none;
-	border-radius: 6px 6px 0 0;
+
+.np-settings-tab-btn {
+	display:       flex;
+	align-items:   center;
+	gap:           5px;
+	padding:       5px 12px;
+	border-radius: 8px;
+	border:        1px solid transparent;
 	background:    transparent;
 	color:         var(--text-muted);
-	font-size:     13px;
+	font-size:     12.5px;
 	font-weight:   500;
 	cursor:        pointer;
 	transition:    background 0.12s, color 0.12s;
-	-webkit-tap-highlight-color: transparent;
 }
-.np-tab-btn:hover  { background: var(--background-modifier-hover); color: var(--text-normal); }
-.np-tab-btn.np-tab-active {
-	background:    var(--background-primary);
-	color:         var(--text-accent);
-	border-bottom: 2px solid var(--interactive-accent);
-	margin-bottom: -2px;
+.np-settings-tab-btn:hover {
+	background: var(--background-modifier-hover);
+	color:      var(--text-normal);
 }
-.np-render-note {
-	font-size:   12px;
-	color:       var(--text-muted);
-	margin:      4px 0 12px;
+.np-settings-tab-active {
+	background:   var(--interactive-accent) !important;
+	color:        #fff !important;
+	border-color: var(--interactive-accent) !important;
+}
+.np-tab-icon { display: flex; align-items: center; }
+.np-tab-icon svg { width: 14px; height: 14px; }
+.np-tab-label { white-space: nowrap; }
+
+.np-settings-tab-wrap { /* pane container — no special styling needed */ }
+.np-settings-pane h3  { margin-top: 20px; }
+
+.np-setting-desc {
+	font-size:  13px;
+	color:      var(--text-muted);
+	margin:     4px 0 12px;
 	line-height: 1.5;
 }
 
+
+
 /* ═══════════════════════════════════════════════════════════════
-   PREVIEW — BUTTON ROW (cog left, actions right)
+   CSS PRESETS ACCORDION (Snippets tab)
    ═══════════════════════════════════════════════════════════════ */
-.native-print-btn-row {
+.np-presets-accordion {
+	border:        1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin-bottom: 16px;
+	overflow:      hidden;
+}
+.np-presets-summary {
 	display:         flex;
 	align-items:     center;
 	justify-content: space-between;
-	padding:         10px 0 0;
-	gap:             8px;
+	padding:         10px 14px;
+	cursor:          pointer;
+	user-select:     none;
+	background:      var(--background-secondary);
+	list-style:      none;
+	gap:             10px;
 }
-.np-btn-actions {
-	display:  flex;
-	gap:      8px;
+.np-presets-summary::-webkit-details-marker { display: none; }
+.np-presets-summary::before {
+	content:     '›';
+	font-size:   16px;
+	transition:  transform 0.18s;
+	color:       var(--text-muted);
+	flex-shrink: 0;
+}
+details.np-presets-accordion[open] .np-presets-summary::before {
+	transform: rotate(90deg);
+}
+.np-presets-label {
+	flex:        1;
+	font-weight: 600;
+	font-size:   13.5px;
+	color:       var(--text-normal);
+}
+.np-presets-badge {
+	font-size:     11px;
+	font-weight:   600;
+	padding:       2px 8px;
+	border-radius: 10px;
+	background:    var(--interactive-accent);
+	color:         #fff;
+	white-space:   nowrap;
+}
+.np-presets-body {
+	padding: 4px 0;
+}
+.np-preset-row {
+	display:     flex;
 	align-items: center;
+	gap:         12px;
+	padding:     8px 14px;
+	transition:  background 0.10s;
 }
-.np-settings-cog {
-	width:         40px;
-	height:        40px;
-	border-radius: 50%;
-	border:        1px solid var(--background-modifier-border);
-	background:    var(--background-secondary);
-	color:         var(--text-muted);
-	display:       flex;
-	align-items:   center;
-	justify-content: center;
-	cursor:        pointer;
+.np-preset-row:hover { background: var(--background-modifier-hover); }
+.np-preset-info {
+	display:        flex;
+	flex-direction: column;
+	flex:           1;
+	gap:            2px;
+	min-width:      0;
+}
+.np-preset-name {
+	font-size:   13px;
+	font-weight: 500;
+	color:       var(--text-normal);
+	white-space: nowrap;
+	overflow:    hidden;
+	text-overflow: ellipsis;
+}
+.np-preset-desc {
+	font-size: 11.5px;
+	color:     var(--text-muted);
+	white-space: nowrap;
+	overflow:  hidden;
+	text-overflow: ellipsis;
+}
+/* Reuse snippet toggle style */
+.np-preset-toggle-label {
+	width:         36px;
+	height:        20px;
 	flex-shrink:   0;
-	transition:    background 0.12s, color 0.12s, transform 0.25s;
-	-webkit-tap-highlight-color: transparent;
 }
-.np-settings-cog:hover  { background: var(--background-modifier-hover); color: var(--text-normal); }
-.np-settings-cog:active { transform: rotate(30deg); opacity: 0.7; }
