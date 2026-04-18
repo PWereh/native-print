@@ -24,8 +24,12 @@ export async function renderNoteToHtml(
 	inlineImages  = false,
 	renderSettings?: Partial<Pick<PrintPluginSettings, 'postProcessorWaitMs' | 'renderMermaid'>>
 ): Promise<string> {
-	const container = document.createElement('div');
-	const child     = new Component();
+	// Attach to live DOM — Obsidian post-processors (Mermaid, callouts, DataView)
+	// silently abort on detached elements. Off-screen hidden div is the fix.
+	const container = document.body.createDiv({
+		attr: { style: 'position:absolute;left:-9999px;top:-9999px;width:860px;visibility:hidden;' },
+	});
+	const child = new Component();
 	child.load();
 
 	try {
@@ -45,6 +49,9 @@ export async function renderNoteToHtml(
 		await renderMermaidFallback(container);
 	}
 
+	// Strip Obsidian UI chrome (copy buttons, edit handles) before capture.
+	container.querySelectorAll('.copy-code-button,.code-block-flair,.edit-block-button').forEach(e => e.remove());
+
 	// Safety pass: strip any stray <script>/<style> that survived rendering
 	processHtmlBlocks(container);
 
@@ -52,7 +59,9 @@ export async function renderNoteToHtml(
 		await inlineVaultImages(app, container, sourcePath);
 	}
 
-	return container.innerHTML;
+	const html = container.innerHTML;
+	container.remove();
+	return html;
 }
 
 async function inlineVaultImages(app: App, container: HTMLElement, sourcePath: string): Promise<void> {

@@ -5,19 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [2.6.0] — 2026-04-17
+## [2.5.1] — 2026-04-18 | base: 56d43cf
 
 ### Fixed
-- **Nude settings cog** — `.np-settings-cog-btn` now `background:transparent; border:none`. Icon-only, `color:rgba(255,255,255,0.45)`, rotates 25° on hover.
-- **Button-row layout quirks** — single authoritative CSS block: cog far-left, `np-btn-spacer` flex-fills, `np-btn-actions` flush-right. Removed all `!important` overrides from the v2.5.0 patch block. Mobile wraps cleanly.
-- **Colour / Wrap toggles restored** — `trueColour` and `codeWrap` circle toggles re-added to the preview toolbar.
+- **Mermaid/post-processors** — container attached to live `document.body` (off-screen hidden div). Post-processors abort on detached nodes; this is the root fix for Mermaid not rendering. UI chrome stripped before capture.
+- **Theme-aware callouts** — `getCalloutCss()` reads `--callout-{type}` CSS vars from `getComputedStyle(document.body)`. Derives hex from RGB tuple for border. Adds `--np-callout-accent` so title colour and border both track the active theme.
+- **Vertical settings tabs** — `display()` wraps `np-settings-tab-bar` + `np-settings-tab-wrap` in `np-settings-layout` (flex row). Tab bar is `flex-direction:column; width:128px; border-right`. Previously horizontal because no layout wrapper existed.
+- **Nude cog** — `background:transparent; border:none; padding:0`. Rotates on hover/active; no pill/circle surround.
 
 ### Added
-- **Theme-aware callouts** — `getCalloutCss()` reads live `--callout-{type}` CSS vars from `getComputedStyle(document.body)` and emits `rgba(r,g,b,0.08)` bg + matching border and title colour. Falls back to Obsidian default palette.
-- **Image scale mode** (`natural` | `fill` | `contain`) — new setting in the Images tab. `natural` honours `|width` attr; `fill` forces column-width; `contain` caps at 100%.
-- **CSS preset accordion** — Snippets tab: collapsible `<details>` "Apply CSS styles" with six built-in presets (Mermaid zoom, Callout border-only, Code polish, Zebra tables, Hide link underlines, Compact). Active count shown in badge. Injected in `wrapDocument()` before vault snippets.
-- **`enabledCssPresets: string[]`** added to `PrintPluginSettings` and defaults.
-- **`ImageScaleMode` type** exported from `settings.ts`.
+- **CSS presets master toggle** (Snippets tab) — master checkbox labelled "Apply CSS styles" with active-count badge. ON reveals preset list; OFF clears all. Six built-in presets: `mermaid-zoom`, `callout-border`, `code-polish`, `table-zebra`, `hide-links`, `compact`. Injected via `wrapDocument()`. `enabledCssPresets: string[]` added to settings.
 
 ## [2.4.0] — 2026-04-11
 
