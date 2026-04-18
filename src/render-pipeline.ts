@@ -78,14 +78,40 @@ export function processHtmlBlocks(container: HTMLElement): void {
  * Must be included in every print output when renderCallouts is enabled.
  */
 export function getCalloutCss(): string {
+	// Read live theme colour vars — each --callout-{type} = "r,g,b" RGB tuple.
+	// Falls back to Obsidian's default dark-theme palette when unset.
+	type E = [types: string[], cssVar: string, rgbFb: string, hexFb: string];
+	const palette: E[] = [
+		[['note','info'],                                    '--callout-info',     '8,109,221',   '#086DDD'],
+		[['tip','hint'],                                     '--callout-tip',      '45,183,181',  '#2db7b5'],
+		[['important','abstract','summary','tldr'],          '--callout-abstract', '83,223,221',  '#53DFDD'],
+		[['success','check','done'],                         '--callout-success',  '12,181,79',   '#0cb54f'],
+		[['question','help','faq'],                          '--callout-question', '189,142,55',  '#BD8E37'],
+		[['warning','caution','attention'],                  '--callout-warning',  '217,108,0',   '#d96c00'],
+		[['danger','error','failure','fail','missing','bug'],'--callout-error',    '228,55,75',   '#E4374B'],
+		[['example'],                                        '--callout-example',  '168,130,255', '#a882ff'],
+		[['quote','cite'],                                   '--callout-quote',    '158,158,158', '#9e9e9e'],
+	];
+	const cs = (typeof document !== 'undefined') ? getComputedStyle(document.body) : null;
+	const typeRules = palette.map(([types, cssVar, rgbFb, hexFb]) => {
+		const liveRgb = cs?.getPropertyValue(cssVar).trim() || rgbFb;
+		const parts   = liveRgb.split(',').map(x => parseInt(x.trim(), 10));
+		const hex     = (parts.length === 3 && parts.every(n => !isNaN(n)))
+			? '#' + parts.map(n => n.toString(16).padStart(2, '0')).join('')
+			: hexFb;
+		const sels    = types.map(t => `.callout[data-callout="${t}"]`).join(',\n');
+		return `${sels} {\n\tbackground: rgba(${liveRgb},0.08);\n\tborder-left-color: ${hex};\n\t--np-callout-accent: ${hex};\n}`;
+	}).join('\n');
+
 	return `
-/* ── Callouts / Admonitions ── */
+/* ── Callouts — theme-aware ── */
 .callout {
 	border-radius: 5px;
 	padding: 10px 14px;
 	margin: 0.85em 0;
 	page-break-inside: avoid;
 	position: relative;
+	border-left: 4px solid var(--np-callout-accent, #086DDD);
 }
 .callout-title {
 	display: flex;
@@ -94,61 +120,16 @@ export function getCalloutCss(): string {
 	font-weight: 700;
 	margin-bottom: 6px;
 	font-size: 0.95em;
+	color: var(--np-callout-accent, #086DDD);
 }
-.callout-icon svg { width: 16px; height: 16px; flex-shrink: 0; }
+.callout-icon svg { width: 16px; height: 16px; flex-shrink: 0; fill: currentColor; }
 .callout-fold { display: none; }
 .callout-content > :first-child { margin-top: 0; }
 .callout-content > :last-child  { margin-bottom: 0; }
-
-/* Colour palette — mirrors Obsidian's default callout colours */
-.callout[data-callout="note"],
-.callout[data-callout="info"] {
-	background: rgba(8,109,221,0.07); border-left: 4px solid #086DDD;
-}
-.callout[data-callout="tip"],
-.callout[data-callout="hint"] {
-	background: rgba(45,183,181,0.07); border-left: 4px solid #2db7b5;
-}
-.callout[data-callout="important"],
-.callout[data-callout="abstract"],
-.callout[data-callout="summary"],
-.callout[data-callout="tldr"] {
-	background: rgba(83,223,221,0.07); border-left: 4px solid #53DFDD;
-}
-.callout[data-callout="success"],
-.callout[data-callout="check"],
-.callout[data-callout="done"] {
-	background: rgba(12,181,79,0.07); border-left: 4px solid #0cb54f;
-}
-.callout[data-callout="question"],
-.callout[data-callout="help"],
-.callout[data-callout="faq"] {
-	background: rgba(189,142,55,0.07); border-left: 4px solid #BD8E37;
-}
-.callout[data-callout="warning"],
-.callout[data-callout="caution"],
-.callout[data-callout="attention"] {
-	background: rgba(217,108,0,0.08); border-left: 4px solid #d96c00;
-}
-.callout[data-callout="danger"],
-.callout[data-callout="error"],
-.callout[data-callout="failure"],
-.callout[data-callout="fail"],
-.callout[data-callout="missing"],
-.callout[data-callout="bug"] {
-	background: rgba(228,55,75,0.07); border-left: 4px solid #E4374B;
-}
-.callout[data-callout="example"] {
-	background: rgba(168,130,255,0.07); border-left: 4px solid #a882ff;
-}
-.callout[data-callout="quote"],
-.callout[data-callout="cite"] {
-	background: rgba(158,158,158,0.07); border-left: 4px solid #9e9e9e;
-}
-/* Default fallback for unknown callout types */
 .callout:not([data-callout]) {
-	background: rgba(8,109,221,0.07); border-left: 4px solid #086DDD;
+	background: rgba(8,109,221,0.08); border-left-color: #086DDD; --np-callout-accent: #086DDD;
 }
+${typeRules}
 `;
 }
 

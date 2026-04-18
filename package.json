@@ -1,6 +1,6 @@
 {
 	"name": "native-print",
-	"version": "2.5.0",
+	"version": "2.5.1",
 	"description": "Print Obsidian notes on desktop and Android.",
 	"main": "main.js",
 	"scripts": {

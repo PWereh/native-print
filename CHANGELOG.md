@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.5.1] — 2026-04-18 | base: 56d43cf
+
+### Fixed
+- **Mermaid/post-processors** — container attached to live `document.body` (off-screen hidden div). Post-processors abort on detached nodes; this is the root fix for Mermaid not rendering. UI chrome stripped before capture.
+- **Theme-aware callouts** — `getCalloutCss()` reads `--callout-{type}` CSS vars from `getComputedStyle(document.body)`. Derives hex from RGB tuple for border. Adds `--np-callout-accent` so title colour and border both track the active theme.
+- **Vertical settings tabs** — `display()` wraps `np-settings-tab-bar` + `np-settings-tab-wrap` in `np-settings-layout` (flex row). Tab bar is `flex-direction:column; width:128px; border-right`. Previously horizontal because no layout wrapper existed.
+- **Nude cog** — `background:transparent; border:none; padding:0`. Rotates on hover/active; no pill/circle surround.
+
+### Added
+- **CSS presets master toggle** (Snippets tab) — master checkbox labelled "Apply CSS styles" with active-count badge. ON reveals preset list; OFF clears all. Six built-in presets: `mermaid-zoom`, `callout-border`, `code-polish`, `table-zebra`, `hide-links`, `compact`. Injected via `wrapDocument()`. `enabledCssPresets: string[]` added to settings.
+
 ## [2.4.0] — 2026-04-11
 
 ### Added

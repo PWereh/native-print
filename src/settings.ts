@@ -45,7 +45,8 @@ export interface PrintPluginSettings {
 	imageDropShadow:    boolean;
 	imageBorderRadius:  number;
 	stripImages:        boolean;
-	enabledSnippets: string[];
+	enabledCssPresets: string[];
+	enabledSnippets:   string[];
 }
 
 export const MARGIN_PRESETS: Record<MarginPreset, { top: number; bottom: number; left: number; right: number }> = {
@@ -91,7 +92,8 @@ export const DEFAULT_SETTINGS: PrintPluginSettings = {
 	imageDropShadow:    false,
 	imageBorderRadius:  0,
 	stripImages:        false,
-	enabledSnippets: [],
+	enabledCssPresets: [],
+	enabledSnippets:   [],
 };
 
 export class PrintSettingTab extends PluginSettingTab {
@@ -117,8 +119,9 @@ export class PrintSettingTab extends PluginSettingTab {
 			{ id: 'snippets',  label: 'Snippets',   icon: 'code' },
 		];
 
-		const tabBar  = containerEl.createDiv({ cls: 'np-settings-tab-bar' });
-		const tabWrap = containerEl.createDiv({ cls: 'np-settings-tab-wrap' });
+		const tabLayout = containerEl.createDiv({ cls: 'np-settings-layout' });
+		const tabBar    = tabLayout.createDiv({ cls: 'np-settings-tab-bar' });
+		const tabWrap   = tabLayout.createDiv({ cls: 'np-settings-tab-wrap' });
 
 		const panes = {} as Record<TabId, HTMLDivElement>;
 		const btns  = {} as Record<TabId, HTMLButtonElement>;
@@ -331,8 +334,67 @@ export class PrintSettingTab extends PluginSettingTab {
 	}
 
 	private buildSnippetsPane(el: HTMLElement): void {
-		el.createEl('h3', { text: 'Print CSS snippets' });
-		el.createEl('p', { cls: 'np-setting-desc', text: 'Toggle snippets from .obsidian/snippets/ to inject into every print output.' });
+		// ── Built-in CSS presets ── master toggle → unfolds list ─────────────
+		el.createEl('h3', { text: 'CSS presets' });
+		el.createEl('p', { cls: 'np-setting-desc',
+			text: 'Built-in style presets. Enable the master toggle to configure individual presets.' });
+
+		const masterRow = el.createDiv({ cls: 'np-preset-master-row' });
+		const lbl = masterRow.createDiv({ cls: 'np-preset-master-lbl' });
+		lbl.createSpan({ cls: 'np-preset-master-title', text: 'Apply CSS styles' });
+		const badge = lbl.createSpan({ cls: 'np-preset-badge' });
+		badge.textContent = this.plugin.settings.enabledCssPresets.length > 0
+			? `${this.plugin.settings.enabledCssPresets.length} active` : '';
+
+		const masterToggleWrap = masterRow.createEl('div', { cls: 'np-snippet-toggle' });
+		const masterCb = masterToggleWrap.createEl('input', { attr: { type: 'checkbox', id: 'np-preset-master' } }) as HTMLInputElement;
+		masterCb.checked = this.plugin.settings.enabledCssPresets.length > 0;
+		masterToggleWrap.createEl('label', { attr: { for: 'np-preset-master' }, cls: 'np-snippet-toggle-label' });
+
+		const presetList = el.createDiv({ cls: 'np-preset-list' });
+		presetList.style.display = masterCb.checked ? '' : 'none';
+
+		const PRESETS: Record<string, { name: string; desc: string }> = {
+			'mermaid-zoom':   { name: 'Mermaid zoom',         desc: 'Responsive diagrams with resize handle' },
+			'callout-border': { name: 'Callout border-only',  desc: 'Strip fill, keep left-border accent' },
+			'code-polish':    { name: 'Code block polish',    desc: 'Soft bg, 9pt mono, tighter padding' },
+			'table-zebra':    { name: 'Zebra-stripe tables',  desc: 'Alternating row shading' },
+			'hide-links':     { name: 'Hide link underlines', desc: 'Remove underline from all links' },
+			'compact':        { name: 'Compact spacing',      desc: 'Tighter line-height and margins' },
+		};
+
+		for (const [key, p] of Object.entries(PRESETS)) {
+			const row = presetList.createDiv({ cls: 'np-preset-row' });
+			const info = row.createDiv({ cls: 'np-preset-info' });
+			info.createSpan({ cls: 'np-preset-name', text: p.name });
+			info.createSpan({ cls: 'np-preset-desc', text: p.desc });
+			const tw = row.createEl('div', { cls: 'np-snippet-toggle' });
+			const cb = tw.createEl('input', { attr: { type: 'checkbox', id: `np-preset-${key}` } }) as HTMLInputElement;
+			cb.checked = this.plugin.settings.enabledCssPresets.includes(key);
+			tw.createEl('label', { attr: { for: `np-preset-${key}` }, cls: 'np-snippet-toggle-label' });
+			cb.addEventListener('change', async () => {
+				const list = this.plugin.settings.enabledCssPresets;
+				if (cb.checked) { if (!list.includes(key)) list.push(key); }
+				else { const i = list.indexOf(key); if (i !== -1) list.splice(i, 1); }
+				badge.textContent = list.length > 0 ? `${list.length} active` : '';
+				await this.plugin.saveSettings();
+			});
+		}
+
+		masterCb.addEventListener('change', async () => {
+			presetList.style.display = masterCb.checked ? '' : 'none';
+			if (!masterCb.checked) {
+				this.plugin.settings.enabledCssPresets = [];
+				presetList.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(c => { c.checked = false; });
+				badge.textContent = '';
+				await this.plugin.saveSettings();
+			}
+		});
+
+		// ── Vault snippets ────────────────────────────────────────────────────
+		el.createEl('h3', { text: 'Vault CSS snippets' });
+		el.createEl('p', { cls: 'np-setting-desc',
+			text: 'Toggle snippets from .obsidian/snippets/ — same files as Appearance → CSS snippets.' });
 		const header    = el.createDiv({ cls: 'np-snippet-header' });
 		const reloadBtn = header.createEl('button', { cls: 'np-snippet-reload', text: '↻ Reload' });
 		this.snippetListEl = el.createDiv({ cls: 'np-snippet-list' });

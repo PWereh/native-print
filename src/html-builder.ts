@@ -57,8 +57,21 @@ async function wrapDocument(
 		? `pre, code { white-space: pre-wrap !important; word-break: break-all !important; }`
 		: `pre { overflow-x: auto; }`;
 
-	const snippetCss    = (app && s.enabledSnippets?.length)
+	const snippetCss = (app && s.enabledSnippets?.length)
 		? await loadEnabledSnippetsCss(app, s.enabledSnippets)
+		: '';
+
+	// Built-in CSS presets — keyed by id, no file I/O needed
+	const PRESET_CSS: Record<string, string> = {
+		'mermaid-zoom':   'svg[id^="m"][width][height][viewBox]{max-width:95%;max-height:95%}\ndiv.mermaid{margin-left:0!important;text-align:center;resize:both;overflow:auto;position:relative;max-height:600px;max-width:100%}',
+		'callout-border': '.callout{background:transparent!important;border:none!important;border-left:4px solid var(--np-callout-accent,#086DDD)!important;border-radius:0!important}',
+		'code-polish':    'pre,code{font-size:9pt!important;background:#f4f4f4!important;border:1px solid #ddd!important;border-radius:3px!important}pre{padding:8px 10px!important}',
+		'table-zebra':    'tbody tr:nth-child(even){background:rgba(0,0,0,0.04)!important}',
+		'hide-links':     'a{text-decoration:none!important}',
+		'compact':        'body{line-height:1.4!important}p,li{margin:0.2em 0!important}h1,h2,h3{margin:0.5em 0 0.25em!important}',
+	};
+	const presetCss = (s.enabledCssPresets?.length)
+		? s.enabledCssPresets.map(k => PRESET_CSS[k] ?? '').filter(Boolean).join('\n')
 		: '';
 
 	const renderingCss  = buildRenderingCss(s);
@@ -94,6 +107,7 @@ async function wrapDocument(
     ${s.includeYamlFrontmatter ? '' : '.frontmatter, .frontmatter-container { display: none !important; }'}
     ${renderingCss ? `/* ── Rendering ── */\n${renderingCss}` : ''}
     ${imageCss ? `/* ── Images ── */\n${imageCss}` : ''}
+    ${presetCss  ? `/* ── CSS Presets ──────────── */\n${presetCss}` : ''}
     ${snippetCss ? `/* ── Print CSS Snippets ── */\n${snippetCss}` : ''}
     ${previewOverlayCss(s)}
   </style>
