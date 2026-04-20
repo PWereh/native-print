@@ -48,7 +48,7 @@ gantt
     True-colour print output               :done,    ds3, 2026-04-01, 2026-04-08
 
     section v2.4 · Layout Engine
-    Custom header / footer templates       :         le1, 2026-05-01, 2026-05-21
+    Custom header / footer templates       :done,    le1, 2026-04-18, 2026-04-18
     Inject print CSS from vault snippets   :done,    le2, 2026-04-08, 2026-04-11
 
     section v3.0 · Pandoc Engine
@@ -70,10 +70,10 @@ gantt
 | Preview | Image inline embedding (base64) | High | ✅ 2.3.0 |
 | Preview | True-colour print output | Medium | ✅ 2.3.0 |
 
-| Layout | Custom header/footer per-template | Medium | Planned |
+| Layout | Custom header/footer per-template | Medium | ✅ 2.6.0 |
 | Layout | Print CSS from vault snippets (.obsidian/snippets) | Medium | ✅ 2.4.0 |
 | Engine | Pandoc integration (format/typeset) | Low | Planned |
-| UX | Print from file-explorer context menu | Medium | Planned |
+| UX | Print from file-explorer context menu | Medium | ✅ 2.6.0 |
 
 ---
 

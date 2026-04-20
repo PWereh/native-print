@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.6.1] — 2026-04-20 | base: 00f9fdb
+
+### Fixed
+- **`#preview-pagebreak-001` — page-break algorithm fully replaced**
+  Root cause: `scrollHeight` read inside a CSS-scaled iframe returns the
+  *scaled* value, not paper-pixel height — making page-count estimation
+  systematically wrong.
+
+  New approach — **two-phase measurement**:
+  1. **Measure phase**: render HTML into a hidden 1:1 off-screen iframe
+     (`left:-9999px`, paper width, no CSS transform). Read
+     `contentDocument.scrollHeight` — this is the true document height in
+     paper pixels, unaffected by any scale factor. Timeout fallback at 4 s.
+  2. **Display phase**: write the same HTML into the visible iframe, set
+     `height = nPages × pageH` (all pages present for print), apply
+     `transform: scale(…)` to fit available width. Inject per-page overlays.
+
+  Removed: JS page-break script, `allow-scripts` sandbox flag, `postMessage`
+  / `msgHandler` / `layoutTimeout` architecture from previous attempts.
+  Sandbox reverted to `allow-same-origin` only.
+  `removeMsgHandler()` kept as a no-op for compatibility.
+
 ## [2.6.0] — 2026-04-18 | base: 742b39f
 
 ### Added
