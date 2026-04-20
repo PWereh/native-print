@@ -132,10 +132,10 @@ export class PrintPreviewModal extends Modal {
 		this.scrollCanvas = previewArea.createDiv({ cls: 'np-scroll-canvas' });
 		const scrollPad   = this.scrollCanvas.createDiv({ cls: 'np-scroll-pad' });
 		this.wrapper      = scrollPad.createDiv({ cls: 'np-frame-wrapper' });
-		// allow-scripts enables the page-break algorithm inside the srcdoc.
+		// allow-same-origin: lets us read scrollHeight; no scripts needed.
 		this.frame = this.wrapper.createEl('iframe', {
 			cls: 'native-print-preview-frame',
-			attr: { sandbox: 'allow-same-origin allow-scripts' },
+			attr: { sandbox: 'allow-same-origin' },
 		}) as HTMLIFrameElement;
 
 		this.pageCounter = previewArea.createDiv({ cls: 'np-page-counter' });
@@ -251,62 +251,127 @@ export class PrintPreviewModal extends Modal {
 		).open();
 	}
 
-	// ── Rendering ──────────────────────────────────────────────────────────────
+	// ── Rendering — two-phase page measurement ────────────────────────────────
+	//
+	// Phase 1 (measure): render the document in a hidden off-screen iframe at
+	//   exact paper px (1:1, no CSS scale). Read its scrollHeight — this gives
+	//   the true document height in paper-pixel units, unaffected by scaling.
+	//   getBoundingClientRect inside a scaled iframe produces scaled values,
+	//   making page-count estimation impossible. The 1:1 frame sidesteps this.
+	//
+	// Phase 2 (display): write the same HTML into the visible iframe, set its
+	//   height to `nPages × pageH` (so the print engine sees full pages), then
+	//   CSS-scale it to fit the available width. Inject per-page overlays.
+	//
+	// No JS injection, no postMessage, no allow-scripts.
 
 	private renderFrame(): void {
 		if (!this.frame || !this.wrapper) return;
 		const { paperW, pageH } = this.paperPx();
 		this.applyScale(paperW, pageH);
-		this.removeMsgHandler();
+
 		if (this.layoutTimeout) { clearTimeout(this.layoutTimeout); this.layoutTimeout = null; }
 
-		// Listen for the page-break script's postMessage (or fall back on timeout).
-		this.msgHandler = (e: MessageEvent) => {
-			if (e.source !== this.frame?.contentWindow) return;
-			if ((e.data as { type?: string })?.type !== 'np-layout-ready') return;
-			this.removeMsgHandler();
-			if (this.layoutTimeout) { clearTimeout(this.layoutTimeout); this.layoutTimeout = null; }
-			this.onFrameLoaded(paperW, pageH, (e.data as { scrollH: number }).scrollH);
-		};
-		window.addEventListener('message', this.msgHandler);
+		buildHelperUrl.wrapDocument(this.fragment, this.title, this.local, this.plugin.app)
+			.then(html => this.measureThenRender(html, paperW, pageH))
+			.catch(() => { /* non-fatal */ });
+	}
 
-		// Fallback: if postMessage never arrives (e.g. script blocked), use scrollHeight directly.
+	/**
+	 * Phase 1: mount a hidden 1:1 iframe, measure scrollHeight, then hand off
+	 * to Phase 2.  The measurement iframe is removed after reading.
+	 */
+	private measureThenRender(html: string, paperW: number, pageH: number): void {
+		// Create hidden 1:1 measurement iframe — same width as paper, tall enough
+		// to render the full document without page breaks clipping content.
+		const mFrame = document.body.createEl('iframe', {
+			attr: { sandbox: 'allow-same-origin' },
+		}) as HTMLIFrameElement;
+		mFrame.style.cssText = [
+			`width:${paperW}px`,
+			`height:${pageH * 20}px`,   // generous initial height
+			'position:absolute',
+			'left:-9999px',
+			'top:-9999px',
+			'visibility:hidden',
+			'pointer-events:none',
+		].join(';');
+		document.body.appendChild(mFrame);
+
+		const cleanup = () => { try { mFrame.remove(); } catch { /**/ } };
+
+		const onMeasureLoad = () => {
+			try {
+				const doc = mFrame.contentDocument;
+				if (!doc) { cleanup(); this.renderDisplay(html, paperW, pageH, pageH); return; }
+				// scrollHeight is the true full document height at 1:1 paper scale.
+				const trueH = doc.documentElement.scrollHeight;
+				cleanup();
+				this.renderDisplay(html, paperW, pageH, trueH);
+			} catch {
+				cleanup();
+				this.renderDisplay(html, paperW, pageH, pageH);
+			}
+		};
+
 		this.layoutTimeout = setTimeout(() => {
-			this.removeMsgHandler();
-			const sh = this.frame?.contentDocument?.documentElement?.scrollHeight ?? pageH;
-			this.onFrameLoaded(paperW, pageH, sh);
+			// Fallback if load never fires (sandboxed iframe edge case).
+			cleanup();
+			this.renderDisplay(html, paperW, pageH, pageH);
 		}, LAYOUT_TIMEOUT);
 
-		buildHelperUrl.wrapDocument(this.fragment, this.title, this.local, this.plugin.app)
-			.then(html => { if (this.frame) this.frame.srcdoc = html; })
-			.catch(() => { /* non-fatal — snippets unavailable */ });
+		mFrame.addEventListener('load', () => {
+			if (this.layoutTimeout) { clearTimeout(this.layoutTimeout); this.layoutTimeout = null; }
+			onMeasureLoad();
+		}, { once: true });
+
+		mFrame.srcdoc = html;
 	}
 
-	private removeMsgHandler(): void {
-		if (this.msgHandler) {
-			window.removeEventListener('message', this.msgHandler);
-			this.msgHandler = null;
-		}
-	}
-
-	private onFrameLoaded(paperW: number, pageH: number, scrollH: number): void {
+	/**
+	 * Phase 2: write HTML into the visible display iframe at full document
+	 * height (nPages × pageH), apply CSS scale, inject per-page overlays.
+	 */
+	private renderDisplay(html: string, paperW: number, pageH: number, trueDocH: number): void {
 		if (!this.frame || !this.wrapper) return;
 
-		this.nPages   = Math.max(1, Math.ceil(scrollH / pageH));
+		this.nPages   = Math.max(1, Math.ceil(trueDocH / pageH));
 		const totalH  = this.nPages * pageH;
 		this.scaledPH = Math.round(pageH  * this.scale);
 		const scaledPW = Math.round(paperW * this.scale);
 
-		this.wrapper.querySelectorAll('.np-page-gap, .np-page-overlay').forEach(el => el.remove());
+		// Set display iframe to full document height — all pages visible.
+		this.frame.style.width  = `${paperW}px`;
 		this.frame.style.height = `${totalH}px`;
+		this.frame.style.transform       = `scale(${this.scale})`;
+		this.frame.style.transformOrigin = 'top left';
+
+		this.wrapper.style.width  = `${scaledPW}px`;
 		this.wrapper.style.height =
 			`${this.scaledPH * this.nPages + PAGE_GAP_PX * (this.nPages - 1)}px`;
 
+		// Rebuild overlays whenever content changes.
+		this.frame.addEventListener('load', () => this.injectOverlays(paperW, pageH), { once: true });
+		this.frame.srcdoc = html;
+
+		if (this.pageCounter) this.pageCounter.textContent = `1 / ${this.nPages}`;
+	}
+
+	private removeMsgHandler(): void {
+		// No-op — kept for interface compatibility; postMessage removed in v2.7.0.
+	}
+
+	private injectOverlays(paperW: number, pageH: number): void {
+		if (!this.wrapper) return;
+
+		const scaledPW = Math.round(paperW * this.scale);
 		const { marginTop: T, marginBottom: B, marginLeft: L, marginRight: R } = this.local;
 		const mT = Math.round(T * PX_PER_MM * this.scale);
 		const mB = Math.round(B * PX_PER_MM * this.scale);
 		const mL = Math.round(L * PX_PER_MM * this.scale);
 		const mR = Math.round(R * PX_PER_MM * this.scale);
+
+		this.wrapper.querySelectorAll('.np-page-gap, .np-page-overlay').forEach(el => el.remove());
 
 		for (let i = 0; i < this.nPages; i++) {
 			const slotTop = i * this.scaledPH + i * PAGE_GAP_PX;
