@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.6.0] — 2026-04-18 | base: 742b39f
+
+### Added
+
+**Custom header / footer templates** (Layout tab)
+New `enableHeader`, `enableFooter` (boolean) and `headerTemplate`, `footerTemplate`
+(string) fields in `PrintPluginSettings`. Defaults: header off, footer off;
+default footer template `{{date}}  ·  Page {{page}} of {{pages}}`.
+`buildHeaderFooterCss()` in `html-builder.ts` generates CSS `@page` margin-box
+rules (`@top-center`, `@bottom-center`). Static variables (`{{title}}`, `{{date}}`)
+resolved at generation time. Page counter variables (`{{page}}`, `{{pages}}`)
+converted to CSS `counter(page)` / `counter(pages)` references resolved by the
+browser print engine. Settings exposed in new **Layout** tab with a variable
+reference table.
+
+**Print from file-explorer context menu** (UX)
+`main.ts` registers a `file-menu` event listener via `this.registerEvent()`.
+Adds "Print note" item (icon: `printer`, section: `action`) to the context menu
+of any `.md` file. Calls `triggerPrint(plugin, false, file)` with the right-clicked
+`TFile` as an explicit override, bypassing the active-view requirement.
+`triggerPrint` / `preparePrint` in `print-command.ts` now accept an optional
+`fileOverride?: TFile` — used when printing from the context menu.
+
+### Changed
+- `triggerPrint(plugin, skipPreview, file?)` — optional third argument
+- `preparePrint` resolves file as: `fileOverride ?? activeView?.file ?? error`
+- `PrintPluginSettings` + `DEFAULT_SETTINGS` — four new fields (header/footer)
+- Settings tab — new **Layout** pane (sixth vertical tab, icon `layout-template`)
+
 ## [2.5.1] — 2026-04-18 | base: 56d43cf
 
 ### Fixed

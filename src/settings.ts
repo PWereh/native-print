@@ -47,6 +47,14 @@ export interface PrintPluginSettings {
 	stripImages:        boolean;
 	enabledCssPresets: string[];
 	enabledSnippets:   string[];
+	/** Header template. Supports: {{title}}, {{date}}, {{page}}, {{pages}} */
+	headerTemplate: string;
+	/** Footer template. Supports: {{title}}, {{date}}, {{page}}, {{pages}} */
+	footerTemplate: string;
+	/** Whether to show the header on every page */
+	enableHeader: boolean;
+	/** Whether to show the footer on every page */
+	enableFooter: boolean;
 }
 
 export const MARGIN_PRESETS: Record<MarginPreset, { top: number; bottom: number; left: number; right: number }> = {
@@ -94,6 +102,10 @@ export const DEFAULT_SETTINGS: PrintPluginSettings = {
 	stripImages:        false,
 	enabledCssPresets: [],
 	enabledSnippets:   [],
+	headerTemplate: '{{title}}',
+	footerTemplate: '{{date}}  ·  Page {{page}} of {{pages}}',
+	enableHeader:   false,
+	enableFooter:   false,
 };
 
 export class PrintSettingTab extends PluginSettingTab {
@@ -110,13 +122,14 @@ export class PrintSettingTab extends PluginSettingTab {
 		containerEl.empty();
 		containerEl.createEl('h2', { text: 'Native Print' });
 
-		type TabId = 'general' | 'page' | 'rendering' | 'images' | 'snippets';
+		type TabId = 'general' | 'page' | 'rendering' | 'images' | 'snippets' | 'layout';
 		const TABS: { id: TabId; label: string; icon: string }[] = [
 			{ id: 'general',   label: 'General',   icon: 'sliders-horizontal' },
 			{ id: 'page',      label: 'Page',       icon: 'file-text' },
 			{ id: 'rendering', label: 'Rendering',  icon: 'layers' },
 			{ id: 'images',    label: 'Images',     icon: 'image' },
 			{ id: 'snippets',  label: 'Snippets',   icon: 'code' },
+			{ id: 'layout',    label: 'Layout',     icon: 'layout-template' },
 		];
 
 		const tabLayout = containerEl.createDiv({ cls: 'np-settings-layout' });
@@ -151,6 +164,7 @@ export class PrintSettingTab extends PluginSettingTab {
 		this.buildRenderingPane(panes.rendering);
 		this.buildImagesPane(panes.images);
 		this.buildSnippetsPane(panes.snippets);
+		this.buildLayoutPane(panes.layout);
 
 		switchTab('general');
 	}
@@ -428,6 +442,57 @@ export class PrintSettingTab extends PluginSettingTab {
 		});
 		const label = toggle.createEl('label', { attr: { for: `np-snip-${entry.filename}` } });
 		label.addClass('np-snippet-toggle-label');
+	}
+
+	private buildLayoutPane(el: HTMLElement): void {
+		el.createEl('h3', { text: 'Page header' });
+		el.createEl('p', { cls: 'np-setting-desc',
+			text: 'Printed in the top margin on every page. Variables: {{title}}, {{date}}, {{page}}, {{pages}}.' });
+
+		new Setting(el)
+			.setName('Enable header')
+			.addToggle(t => t.setValue(this.plugin.settings.enableHeader)
+				.onChange(async v => { this.plugin.settings.enableHeader = v; await this.plugin.saveSettings(); }));
+
+		new Setting(el)
+			.setName('Header template')
+			.addText(t => t.setPlaceholder('{{title}}')
+				.setValue(this.plugin.settings.headerTemplate)
+				.onChange(async v => { this.plugin.settings.headerTemplate = v; await this.plugin.saveSettings(); }));
+
+		el.createEl('h3', { text: 'Page footer' });
+		el.createEl('p', { cls: 'np-setting-desc',
+			text: 'Printed in the bottom margin on every page. Variables: {{title}}, {{date}}, {{page}}, {{pages}}.' });
+
+		new Setting(el)
+			.setName('Enable footer')
+			.addToggle(t => t.setValue(this.plugin.settings.enableFooter)
+				.onChange(async v => { this.plugin.settings.enableFooter = v; await this.plugin.saveSettings(); }));
+
+		new Setting(el)
+			.setName('Footer template')
+			.addText(t => t.setPlaceholder('{{date}}  ·  Page {{page}} of {{pages}}')
+				.setValue(this.plugin.settings.footerTemplate)
+				.onChange(async v => { this.plugin.settings.footerTemplate = v; await this.plugin.saveSettings(); }));
+
+		el.createEl('h3', { text: 'Variable reference' });
+		const table = el.createEl('table', { cls: 'np-var-table' });
+		const thead = table.createEl('thead');
+		const hrow  = thead.createEl('tr');
+		hrow.createEl('th', { text: 'Variable' });
+		hrow.createEl('th', { text: 'Expands to' });
+		const tbody = table.createEl('tbody');
+		const vars: [string, string][] = [
+			['{{title}}', 'Note filename (without extension)'],
+			['{{date}}',  "Today's date (YYYY-MM-DD)"],
+			['{{page}}',  'Current page number'],
+			['{{pages}}', 'Total page count'],
+		];
+		for (const [v, d] of vars) {
+			const r = tbody.createEl('tr');
+			r.createEl('td').createEl('code', { text: v });
+			r.createEl('td', { text: d });
+		}
 	}
 
 	private addMarginSetting(el: HTMLElement, key: 'marginTop' | 'marginBottom' | 'marginLeft' | 'marginRight', label: string): void {

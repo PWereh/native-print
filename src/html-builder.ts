@@ -4,6 +4,54 @@ import { loadEnabledSnippetsCss } from './snippet-loader';
 import { buildRenderingCss } from './render-pipeline';
 import { generateImageCss } from './image-processor';
 
+/**
+ * Generates CSS for @page margin-box headers and footers.
+ * Variables resolved at generation time: {{title}}, {{date}}.
+ * {{page}} and {{pages}} use CSS counters — resolved by the print engine.
+ */
+function buildHeaderFooterCss(s: PrintPluginSettings, title: string): string {
+	if (!s.enableHeader && !s.enableFooter) return '';
+
+	const today = new Date().toISOString().slice(0, 10);
+
+	const resolveStatic = (tpl: string): string =>
+		tpl.replace(/{{title}}/g, title).replace(/{{date}}/g, today);
+
+	// CSS counter() cannot be used inside content strings derived at JS time —
+	// instead we use the @page margin-box with a CSS attr trick: the page/pages
+	// are injected via ::before pseudo-elements using CSS counter(page).
+	const parts: string[] = [
+		`body { counter-reset: page; }`,
+		`@page { counter-increment: page; }`,
+	];
+
+	if (s.enableHeader) {
+		const tpl = resolveStatic(s.headerTemplate);
+		// Replace {{page}} / {{pages}} tokens with CSS counter references
+		const hasPage  = tpl.includes('{{page}}');
+		const hasPages = tpl.includes('{{pages}}');
+		if (!hasPage && !hasPages) {
+			parts.push(`@page { @top-center { content: "${tpl}"; font-family: ${s.fontFamily}; font-size: 9pt; color: #666; } }`);
+		} else {
+			// Split around page tokens — reassemble as CSS string concatenation
+			const cssContent = tpl
+				.replace(/{{page}}/g,  '" counter(page) "')
+				.replace(/{{pages}}/g, '" counter(pages) "');
+			parts.push(`@page { @top-center { content: "${cssContent}"; font-family: ${s.fontFamily}; font-size: 9pt; color: #666; } }`);
+		}
+	}
+
+	if (s.enableFooter) {
+		const tpl = resolveStatic(s.footerTemplate);
+		const cssContent = tpl
+			.replace(/{{page}}/g,  '" counter(page) "')
+			.replace(/{{pages}}/g, '" counter(pages) "');
+		parts.push(`@page { @bottom-center { content: "${cssContent}"; font-family: ${s.fontFamily}; font-size: 9pt; color: #666; } }`);
+	}
+
+	return parts.join('\n');
+}
+
 function escapeHtml(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -61,6 +109,11 @@ async function wrapDocument(
 		? await loadEnabledSnippetsCss(app, s.enabledSnippets)
 		: '';
 
+	// Header / footer — CSS @page margin-box approach.
+	// Variables resolved at CSS generation time (date, title) or by the browser
+	// print engine (page/pages via counter()).
+	const headerFooterCss = buildHeaderFooterCss(s, title);
+
 	// Built-in CSS presets — keyed by id, no file I/O needed
 	const PRESET_CSS: Record<string, string> = {
 		'mermaid-zoom':   'svg[id^="m"][width][height][viewBox]{max-width:95%;max-height:95%}\ndiv.mermaid{margin-left:0!important;text-align:center;resize:both;overflow:auto;position:relative;max-height:600px;max-width:100%}',
@@ -105,6 +158,7 @@ async function wrapDocument(
     blockquote { border-left: 3px solid #999; margin: 0; padding-left: 16px; }
     hr { border: none; border-top: 1px solid #ccc; margin: 1em 0; }
     ${s.includeYamlFrontmatter ? '' : '.frontmatter, .frontmatter-container { display: none !important; }'}
+    ${headerFooterCss ? `/* ── Header / Footer ── */\n${headerFooterCss}` : ''}
     ${renderingCss ? `/* ── Rendering ── */\n${renderingCss}` : ''}
     ${imageCss ? `/* ── Images ── */\n${imageCss}` : ''}
     ${presetCss  ? `/* ── CSS Presets ──────────── */\n${presetCss}` : ''}
