@@ -789,3 +789,29 @@
 .np-preset-info            { flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
 .np-preset-name            { font-size:13px; font-weight:500; color:var(--text-normal); }
 .np-preset-desc            { font-size:11.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ── Layout pane — variable reference table ── */
+.np-var-table {
+	width:           100%;
+	border-collapse: collapse;
+	font-size:       12.5px;
+	margin-top:      8px;
+}
+.np-var-table th {
+	text-align:    left;
+	padding:       4px 10px;
+	border-bottom: 2px solid var(--background-modifier-border);
+	color:         var(--text-muted);
+	font-weight:   600;
+}
+.np-var-table td {
+	padding:       5px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	color:         var(--text-normal);
+}
+.np-var-table td code {
+	background:    var(--code-background);
+	border-radius: 3px;
+	padding:       1px 5px;
+	font-size:     11.5px;
+}

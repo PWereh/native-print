@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Platform } from 'obsidian';
+import { MarkdownView, Notice, Platform, TFile } from 'obsidian';
 import NativePrintPlugin from './main';
 import { renderNoteToHtml } from './renderer';
 import { buildHelperUrl } from './html-builder';
@@ -29,25 +29,26 @@ export function registerPrintCommand(plugin: NativePrintPlugin): void {
 	});
 }
 
-export function triggerPrint(plugin: NativePrintPlugin, skipPreview = false): void {
-	preparePrint(plugin, skipPreview).catch(err => {
+export function triggerPrint(plugin: NativePrintPlugin, skipPreview = false, file?: TFile): void {
+	preparePrint(plugin, skipPreview, file).catch(err => {
 		new Notice(`Print failed: ${(err as Error).message}`);
 		console.error('[NativePrint]', err);
 	});
 }
 
-async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Promise<void> {
-	const view = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (!view?.file) { new Notice('No active note to print.'); return; }
+async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean, fileOverride?: TFile): Promise<void> {
+	// File source: explicit override (context menu) → active view → error
+	const file = fileOverride ?? plugin.app.workspace.getActiveViewOfType(MarkdownView)?.file;
+	if (!file) { new Notice('No active note to print.'); return; }
 
 	const notice = new Notice('Preparing print\u2026', 0);
 	let fragment: string;
 	try {
-		const markdown = await plugin.app.vault.read(view.file);
+		const markdown = await plugin.app.vault.read(file);
 		fragment = await renderNoteToHtml(
 			plugin.app,
 			markdown,
-			view.file.path,
+			file.path,
 			plugin,
 			plugin.settings.inlineImages,
 			{
@@ -59,7 +60,7 @@ async function preparePrint(plugin: NativePrintPlugin, skipPreview: boolean): Pr
 		notice.hide();
 	}
 
-	const title    = view.file.basename;
+	const title    = file.basename;
 	const settings = plugin.settings;
 
 	if (skipPreview || !settings.showPreview) {
