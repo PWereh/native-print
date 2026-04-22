@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.7.0] — 2026-04-22 | base: 3bbaeb9
+
+### Fixed
+- **Page count (20→correct)** — measurement iframe height changed from `pageH * 20` to `1px`. A tall iframe stretches `document.documentElement.scrollHeight` to match its own height; 1px forces the browser to report the true content height only.
+- **Colour toggle restored** — `addCircleToggle(toolbar, 'Colour', trueColour, …)` re-added to the print preview toolbar alongside Title and Metadata.
+- **Settings cog background** — added `background:transparent !important; box-shadow:none !important; -webkit-appearance:none; appearance:none` to `.np-settings-cog-btn` to suppress browser and Obsidian button base styles.
+
+### Changed
+- **Settings tabs — horizontal restored** — removed `np-settings-layout` flex-row wrapper; tab bar is horizontal (flex-wrap) again.
+- **Vault CSS snippets — master toggle accordion** — same pattern as CSS presets: master checkbox "Apply vault CSS styles" with active-count badge, collapses list and clears all on toggle OFF. Reload button lives inside the collapsed panel.
+
 ## [2.6.1] — 2026-04-20 | base: 00f9fdb
 
 ### Fixed

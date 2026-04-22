@@ -132,9 +132,8 @@ export class PrintSettingTab extends PluginSettingTab {
 			{ id: 'layout',    label: 'Layout',     icon: 'layout-template' },
 		];
 
-		const tabLayout = containerEl.createDiv({ cls: 'np-settings-layout' });
-		const tabBar    = tabLayout.createDiv({ cls: 'np-settings-tab-bar' });
-		const tabWrap   = tabLayout.createDiv({ cls: 'np-settings-tab-wrap' });
+		const tabBar  = containerEl.createDiv({ cls: 'np-settings-tab-bar' });
+		const tabWrap = containerEl.createDiv({ cls: 'np-settings-tab-wrap' });
 
 		const panes = {} as Record<TabId, HTMLDivElement>;
 		const btns  = {} as Record<TabId, HTMLButtonElement>;
@@ -405,15 +404,40 @@ export class PrintSettingTab extends PluginSettingTab {
 			}
 		});
 
-		// ── Vault snippets ────────────────────────────────────────────────────
+		// ── Vault CSS snippets — master toggle accordion ─────────────────────
 		el.createEl('h3', { text: 'Vault CSS snippets' });
 		el.createEl('p', { cls: 'np-setting-desc',
-			text: 'Toggle snippets from .obsidian/snippets/ — same files as Appearance → CSS snippets.' });
-		const header    = el.createDiv({ cls: 'np-snippet-header' });
+			text: 'Toggle snippets from .obsidian/snippets/. Enable the master toggle to configure which snippets print.' });
+
+		const vaultEnabled = this.plugin.settings.enabledSnippets.length > 0;
+		const vaultMasterRow = el.createDiv({ cls: 'np-preset-master-row' });
+		const vaultLbl = vaultMasterRow.createDiv({ cls: 'np-preset-master-lbl' });
+		vaultLbl.createSpan({ cls: 'np-preset-master-title', text: 'Apply vault CSS styles' });
+		const vaultBadge = vaultLbl.createSpan({ cls: 'np-preset-badge' });
+		vaultBadge.textContent = vaultEnabled ? `${this.plugin.settings.enabledSnippets.length} active` : '';
+
+		const vaultToggleWrap = vaultMasterRow.createEl('div', { cls: 'np-snippet-toggle' });
+		const vaultMasterCb = vaultToggleWrap.createEl('input', { attr: { type: 'checkbox', id: 'np-vault-master' } }) as HTMLInputElement;
+		vaultMasterCb.checked = vaultEnabled;
+		vaultToggleWrap.createEl('label', { attr: { for: 'np-vault-master' }, cls: 'np-snippet-toggle-label' });
+
+		const vaultListWrap = el.createDiv({ cls: 'np-preset-list' });
+		vaultListWrap.style.display = vaultEnabled ? '' : 'none';
+
+		const header    = vaultListWrap.createDiv({ cls: 'np-snippet-header' });
 		const reloadBtn = header.createEl('button', { cls: 'np-snippet-reload', text: '↻ Reload' });
-		this.snippetListEl = el.createDiv({ cls: 'np-snippet-list' });
+		this.snippetListEl = vaultListWrap.createDiv({ cls: 'np-snippet-list' });
 		reloadBtn.addEventListener('click', () => void this.refreshSnippets());
 		void this.refreshSnippets();
+
+		vaultMasterCb.addEventListener('change', async () => {
+			vaultListWrap.style.display = vaultMasterCb.checked ? '' : 'none';
+			if (!vaultMasterCb.checked) {
+				this.plugin.settings.enabledSnippets = [];
+				vaultBadge.textContent = '';
+				await this.plugin.saveSettings();
+			}
+		});
 	}
 
 	async refreshSnippets(): Promise<void> {
