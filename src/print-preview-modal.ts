@@ -174,6 +174,7 @@ export class PrintPreviewModal extends Modal {
 		});
 		this.addCircleToggle(toolbar, 'Title',    this.local.includeTitle,           v => { this.local.includeTitle = v;            this.scheduleRerender(); });
 		this.addCircleToggle(toolbar, 'Metadata', this.local.includeYamlFrontmatter, v => { this.local.includeYamlFrontmatter = v; this.scheduleRerender(); });
+		this.addCircleToggle(toolbar, 'Colour',   this.local.trueColour,             v => { this.local.trueColour = v;             this.scheduleRerender(); });
 
 		const btnRow = contentEl.createDiv({ cls: 'native-print-btn-row' });
 
@@ -288,7 +289,7 @@ export class PrintPreviewModal extends Modal {
 		}) as HTMLIFrameElement;
 		mFrame.style.cssText = [
 			`width:${paperW}px`,
-			`height:${pageH * 20}px`,   // generous initial height
+			`height:1px`,            // 1px forces scrollHeight = true content height
 			'position:absolute',
 			'left:-9999px',
 			'top:-9999px',

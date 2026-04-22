@@ -668,40 +668,28 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SETTINGS — vertical sidebar tabs (v2.5.1)
+   SETTINGS — horizontal tab bar (v2.5.0 restored)
    ═══════════════════════════════════════════════════════════════ */
-/* Outer flex: [tab sidebar | pane] */
-.np-settings-layout {
-	display:   flex;
-	gap:       0;
-	align-items: flex-start;
-}
-/* Vertical tab bar */
 .np-settings-tab-bar {
-	display:        flex;
-	flex-direction: column;
-	gap:            2px;
-	width:          128px;
-	min-width:      128px;
-	padding:        2px 8px 2px 0;
-	border-right:   1px solid var(--background-modifier-border);
-	margin-right:   16px;
-	flex-shrink:    0;
+	display:      flex;
+	gap:          4px;
+	padding:      4px 0 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 12px;
+	flex-wrap:    wrap;
 }
 .np-settings-tab-btn {
 	display:       flex;
 	align-items:   center;
-	gap:           6px;
-	padding:       6px 10px;
-	border-radius: 6px;
+	gap:           5px;
+	padding:       5px 12px;
+	border-radius: 8px;
 	border:        1px solid transparent;
 	background:    transparent;
 	color:         var(--text-muted);
 	font-size:     12.5px;
 	font-weight:   500;
 	cursor:        pointer;
-	width:         100%;
-	text-align:    left;
 	transition:    background 0.12s, color 0.12s;
 }
 .np-settings-tab-btn:hover {
@@ -711,14 +699,13 @@
 .np-settings-tab-active {
 	background:   var(--interactive-accent) !important;
 	color:        #fff !important;
-	border-color: transparent !important;
+	border-color: var(--interactive-accent) !important;
 }
-.np-tab-icon     { display:flex; align-items:center; flex-shrink:0; }
-.np-tab-icon svg { width:14px; height:14px; }
-.np-tab-label    { white-space:nowrap; }
-/* Pane fills remaining space */
-.np-settings-tab-wrap { flex:1; min-width:0; }
-.np-settings-pane h3  { margin-top:18px; }
+.np-tab-icon { display: flex; align-items: center; }
+.np-tab-icon svg { width: 14px; height: 14px; }
+.np-tab-label { white-space: nowrap; }
+.np-settings-tab-wrap { /* pane fills below bar */ }
+.np-settings-pane h3  { margin-top: 20px; }
 .np-setting-desc {
 	font-size:  13px;
 	color:      var(--text-muted);
@@ -744,7 +731,9 @@
 /* Nude cog — icon-only, no background, no border */
 .np-settings-cog-btn {
 	width:       34px; height:34px; min-width:34px;
-	padding:     0; border:none; background:transparent;
+	padding:     0; border:none; background:transparent !important;
+	box-shadow:  none !important; outline:none;
+	-webkit-appearance: none; appearance: none;
 	color:       rgba(255,255,255,0.42);
 	display:     flex; align-items:center; justify-content:center;
 	cursor:      pointer; flex-shrink:0;
